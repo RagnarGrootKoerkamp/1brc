@@ -1,2 +1,5 @@
 /target
 /measurements.txt
+/perf.data
+/perf.data.old
+/flamegraph.svg
