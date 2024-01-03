@@ -43,7 +43,8 @@ fn main() {
 
     let mut v = h.into_iter().collect::<Vec<_>>();
     v.sort_unstable_by_key(|p| p.0);
-    for (name, r) in v {
+    for (name, r) in &v {
         println!("{name}: {:.1}/{:.1}/{:.1}", r.min, r.avg(), r.max);
     }
+    eprintln!("Num records: {}", v.len());
 }
