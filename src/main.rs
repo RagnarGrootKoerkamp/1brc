@@ -1,7 +1,7 @@
 #![feature(slice_split_once)]
-use fxhash::FxHashMap;
+use fxhash::{FxHashMap, FxHasher};
 use memchr::arch::x86_64::avx2::memchr::One;
-use std::{env::args, io::Read};
+use std::{env::args, hash::Hasher, io::Read};
 
 struct Record {
     count: u32,
@@ -63,6 +63,11 @@ fn format(v: V) -> String {
     format!("{:.1}", v as f64 / 10.0)
 }
 
+fn to_key_fx(name: &[u8]) -> u64 {
+    let mut h = FxHasher::default();
+    h.write(name);
+    h.finish()
+}
 fn to_key(name: &[u8]) -> u64 {
     let mut key = [0u8; 8];
     let l = name.len().min(8);
@@ -93,7 +98,7 @@ fn main() {
             let end = newline.find(data.get_unchecked(separator..)).unwrap();
             let name = data.get_unchecked(..separator);
             let value = data.get_unchecked(separator + 1..separator + end);
-            h.entry(to_key(name))
+            h.entry(to_key_fx(name))
                 .or_insert((Record::default(), name))
                 .0
                 .add(parse(value));
