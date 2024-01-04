@@ -6,3 +6,6 @@ default-run = "one-billion-row-challenge"
 
 [profile.release]
 debug = true
+
+[dependencies]
+fxhash = "0.2.1"

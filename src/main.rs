@@ -1,5 +1,7 @@
 #![feature(slice_split_once)]
-use std::{collections::HashMap, env::args, io::Read};
+use std::{env::args, io::Read};
+
+use fxhash::FxHashMap;
 
 struct Record {
     count: u32,
@@ -75,7 +77,7 @@ fn main() {
         file.read_to_end(&mut data).unwrap();
         assert!(data.pop() == Some(b'\n'));
     }
-    let mut h = HashMap::new();
+    let mut h = FxHashMap::default();
     for line in data.split(|&c| c == b'\n') {
         let (name, value) = line.split_once(|&c| c == b';').unwrap();
         h.entry(to_key(name))
