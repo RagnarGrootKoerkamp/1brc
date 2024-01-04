@@ -83,10 +83,8 @@ fn main() {
     let mut h = FxHashMap::default();
     let mut data = &data[..];
     unsafe {
-        loop {
-            let Some(separator) = memchr(b';', data) else {
-                break;
-            };
+        while !data.is_empty() {
+            let separator = memchr(b';', data).unwrap();
             let end = memchr(b'\n', data.get_unchecked(separator..)).unwrap();
             let name = data.get_unchecked(..separator);
             let value = data.get_unchecked(separator + 1..separator + end);
