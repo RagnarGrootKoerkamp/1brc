@@ -93,48 +93,48 @@ type S = Simd<u8, L>;
 /// and calls `callback` for each line.
 #[inline(always)]
 fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) {
-    unsafe {
-        // TODO: Handle the tail.
-        let simd_data: &[S] = data.align_to::<S>().1;
+    // TODO: Handle the tail.
+    let simd_data: &[S] = unsafe { data.align_to::<S>().1 };
 
-        let sep = S::splat(b';');
-        let end = S::splat(b'\n');
-        let mut start_pos = 0;
-        let mut i = 0;
-        let mut eq_sep = sep.simd_eq(simd_data[i]).to_bitmask();
-        let mut eq_end = end.simd_eq(simd_data[i]).to_bitmask();
+    let sep = S::splat(b';');
+    let end = S::splat(b'\n');
+    let mut start_pos = 0;
+    let mut i = 0;
+    let mut eq_sep = sep.simd_eq(simd_data[i]).to_bitmask();
+    let mut eq_end = end.simd_eq(simd_data[i]).to_bitmask();
 
-        // TODO: Handle the tail.
-        while i < simd_data.len() - 2 {
-            // find ; separator
-            // TODO if?
-            while eq_sep == 0 {
-                i += 1;
-                eq_sep = sep.simd_eq(simd_data[i]).to_bitmask();
-                eq_end = end.simd_eq(simd_data[i]).to_bitmask();
-            }
-            let offset = eq_sep.trailing_zeros();
-            eq_sep ^= 1 << offset;
-            let sep_pos = L * i + offset as usize;
+    // TODO: Handle the tail.
+    while i < simd_data.len() - 2 {
+        // find ; separator
+        // TODO if?
+        while eq_sep == 0 {
+            i += 1;
+            eq_sep = sep.simd_eq(simd_data[i]).to_bitmask();
+            eq_end = end.simd_eq(simd_data[i]).to_bitmask();
+        }
+        let offset = eq_sep.trailing_zeros();
+        eq_sep ^= 1 << offset;
+        let sep_pos = L * i + offset as usize;
 
-            // find \n newline
-            // TODO if?
-            while eq_end == 0 {
-                i += 1;
-                eq_sep = sep.simd_eq(simd_data[i]).to_bitmask();
-                eq_end = end.simd_eq(simd_data[i]).to_bitmask();
-            }
-            let offset = eq_end.trailing_zeros();
-            eq_end ^= 1 << offset;
-            let end_pos = L * i + offset as usize;
+        // find \n newline
+        // TODO if?
+        while eq_end == 0 {
+            i += 1;
+            eq_sep = sep.simd_eq(simd_data[i]).to_bitmask();
+            eq_end = end.simd_eq(simd_data[i]).to_bitmask();
+        }
+        let offset = eq_end.trailing_zeros();
+        eq_end ^= 1 << offset;
+        let end_pos = L * i + offset as usize;
 
+        unsafe {
             callback(
                 data.get_unchecked(start_pos..sep_pos),
                 data.get_unchecked(sep_pos + 1..end_pos),
             );
-
-            start_pos = end_pos + 1;
         }
+
+        start_pos = end_pos + 1;
     }
 }
 
