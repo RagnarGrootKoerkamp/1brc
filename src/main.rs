@@ -97,5 +97,9 @@ fn main() {
             format(r.max)
         );
     }
-    eprintln!("Num records: {}", v.len());
+    eprintln!("Num cities: {}", v.len());
+    let min_len = v.iter().map(|x| x.1 .1.len()).min().unwrap();
+    let max_len = v.iter().map(|x| x.1 .1.len()).max().unwrap();
+    eprintln!("Min city len: {min_len}");
+    eprintln!("Max city len: {max_len}");
 }
