@@ -33,11 +33,13 @@ impl Record {
 type V = i32;
 
 fn parse(mut s: &[u8]) -> V {
-    let neg = if s[0] == b'-' {
-        s = &s[1..];
-        true
-    } else {
-        false
+    let neg = unsafe {
+        if *s.get_unchecked(0) == b'-' {
+            s = s.get_unchecked(1..);
+            true
+        } else {
+            false
+        }
     };
     // s = abc.d
     let (a, b, c, d) = match s {
@@ -80,18 +82,20 @@ fn main() {
     }
     let mut h = FxHashMap::default();
     let mut data = &data[..];
-    loop {
-        let Some(separator) = memchr(b';', data) else {
-            break;
-        };
-        let end = memchr(b'\n', &data[separator..]).unwrap();
-        let name = &data[..separator];
-        let value = &data[separator + 1..separator + end];
-        h.entry(to_key(name))
-            .or_insert((Record::default(), name))
-            .0
-            .add(parse(value));
-        data = &data[separator + end + 1..];
+    unsafe {
+        loop {
+            let Some(separator) = memchr(b';', data) else {
+                break;
+            };
+            let end = memchr(b'\n', data.get_unchecked(separator..)).unwrap();
+            let name = data.get_unchecked(..separator);
+            let value = data.get_unchecked(separator + 1..separator + end);
+            h.entry(to_key(name))
+                .or_insert((Record::default(), name))
+                .0
+                .add(parse(value));
+            data = data.get_unchecked(separator + end + 1..);
+        }
     }
 
     let mut v = h.into_iter().collect::<Vec<_>>();
