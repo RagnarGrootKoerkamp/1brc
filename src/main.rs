@@ -1,6 +1,6 @@
-#![feature(slice_split_once, slice_internals)]
-use core::slice::memchr::memchr;
+#![feature(slice_split_once)]
 use fxhash::FxHashMap;
+use memchr::memchr;
 use std::{env::args, io::Read};
 
 struct Record {
