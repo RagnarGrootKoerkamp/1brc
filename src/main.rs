@@ -1,6 +1,6 @@
 #![feature(slice_split_once)]
 use fxhash::FxHashMap;
-use memchr::memchr;
+use memchr::arch::x86_64::avx2::memchr::One;
 use std::{env::args, io::Read};
 
 struct Record {
@@ -82,10 +82,12 @@ fn main() {
     }
     let mut h = FxHashMap::default();
     let mut data = &data[..];
+    let sep = One::new(b';').unwrap();
+    let newline = One::new(b'\n').unwrap();
     unsafe {
         while !data.is_empty() {
-            let separator = memchr(b';', data).unwrap();
-            let end = memchr(b'\n', data.get_unchecked(separator..)).unwrap();
+            let separator = sep.find(data).unwrap();
+            let end = newline.find(data.get_unchecked(separator..)).unwrap();
             let name = data.get_unchecked(..separator);
             let value = data.get_unchecked(separator + 1..separator + end);
             h.entry(to_key(name))
