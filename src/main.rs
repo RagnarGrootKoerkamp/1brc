@@ -66,7 +66,10 @@ fn format(v: V) -> String {
 fn to_key(name: &[u8]) -> u64 {
     let mut key = [0u8; 8];
     let l = name.len().min(8);
-    key[..l].copy_from_slice(&name[..l]);
+    unsafe {
+        key.get_unchecked_mut(..l)
+            .copy_from_slice(name.get_unchecked(..l));
+    }
     let k = u64::from_ne_bytes(key);
     k ^ name.len() as u64
 }
