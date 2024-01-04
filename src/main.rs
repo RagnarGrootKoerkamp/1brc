@@ -59,6 +59,14 @@ fn format(v: V) -> String {
     format!("{:.1}", v as f64 / 10.0)
 }
 
+fn to_key(name: &[u8]) -> u64 {
+    let mut key = [0u8; 8];
+    let l = name.len().min(8);
+    key[..l].copy_from_slice(&name[..l]);
+    key[0] ^= name.len() as u8;
+    u64::from_ne_bytes(key)
+}
+
 fn main() {
     let filename = args().nth(1).unwrap_or("measurements.txt".to_string());
     let mut data = vec![];
@@ -70,12 +78,15 @@ fn main() {
     let mut h = HashMap::new();
     for line in data.split(|&c| c == b'\n') {
         let (name, value) = line.split_once(|&c| c == b';').unwrap();
-        h.entry(name).or_insert(Record::default()).add(parse(value));
+        h.entry(to_key(name))
+            .or_insert((Record::default(), name))
+            .0
+            .add(parse(value));
     }
 
     let mut v = h.into_iter().collect::<Vec<_>>();
     v.sort_unstable_by_key(|p| p.0);
-    for (name, r) in &v {
+    for (_key, (r, name)) in &v {
         println!(
             "{}: {}/{}/{}",
             std::str::from_utf8(name).unwrap(),
