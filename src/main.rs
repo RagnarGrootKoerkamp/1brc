@@ -1,7 +1,7 @@
-#![feature(slice_split_once)]
-use std::{env::args, io::Read};
-
+#![feature(slice_split_once, slice_internals)]
+use core::slice::memchr::memchr;
 use fxhash::FxHashMap;
+use std::{env::args, io::Read};
 
 struct Record {
     count: u32,
@@ -47,7 +47,7 @@ fn parse(mut s: &[u8]) -> V {
         [c] => (0, 0, 0, c - b'0'),
         [b, c] => (0, b - b'0', c - b'0', 0),
         [a, b, c] => (a - b'0', b - b'0', c - b'0', 0),
-        _ => panic!("Unknown patters {:?}", std::str::from_utf8(s).unwrap()),
+        _ => panic!("Unknown pattern {:?}", std::str::from_utf8(s).unwrap()),
     };
     let v = a as V * 1000 + b as V * 100 + c as V * 10 + d as V;
     if neg {
@@ -77,15 +77,21 @@ fn main() {
         data.reserve(stat.len() as usize + 1);
         let mut file = std::fs::File::open(filename).unwrap();
         file.read_to_end(&mut data).unwrap();
-        assert!(data.pop() == Some(b'\n'));
     }
     let mut h = FxHashMap::default();
-    for line in data.split(|&c| c == b'\n') {
-        let (name, value) = line.split_once(|&c| c == b';').unwrap();
+    let mut data = &data[..];
+    loop {
+        let Some(separator) = memchr(b';', data) else {
+            break;
+        };
+        let end = memchr(b'\n', &data[separator..]).unwrap();
+        let name = &data[..separator];
+        let value = &data[separator + 1..separator + end];
         h.entry(to_key(name))
             .or_insert((Record::default(), name))
             .0
             .add(parse(value));
+        data = &data[separator + end + 1..];
     }
 
     let mut v = h.into_iter().collect::<Vec<_>>();
