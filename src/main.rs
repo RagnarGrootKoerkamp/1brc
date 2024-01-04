@@ -70,9 +70,11 @@ fn to_key(name: &[u8]) -> u64 {
 }
 
 fn main() {
-    let filename = args().nth(1).unwrap_or("measurements.txt".to_string());
+    let filename = &args().nth(1).unwrap_or("measurements.txt".to_string());
     let mut data = vec![];
     {
+        let stat = std::fs::metadata(filename).unwrap();
+        data.reserve(stat.len() as usize + 1);
         let mut file = std::fs::File::open(filename).unwrap();
         file.read_to_end(&mut data).unwrap();
         assert!(data.pop() == Some(b'\n'));
