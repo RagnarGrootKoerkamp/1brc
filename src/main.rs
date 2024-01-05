@@ -119,8 +119,7 @@ fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) 
     // TODO: Handle the tail.
     while *i < simd_data.len() - 3 {
         // find ; separator
-        // TODO if?
-        while eq_sep == 0 {
+        if eq_sep == 0 {
             (eq_sep, eq_end) = eq_step(i);
         }
         let offset = eq_sep.trailing_zeros();
@@ -128,8 +127,7 @@ fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) 
         let sep_pos = L * *i + offset as usize;
 
         // find \n newline
-        // TODO if?
-        while eq_end == 0 {
+        if eq_end == 0 {
             (eq_sep, eq_end) = eq_step(i);
         }
         let offset = eq_end.trailing_zeros();
