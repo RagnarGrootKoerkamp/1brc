@@ -1,12 +1,16 @@
 #![feature(slice_split_once, portable_simd, slice_as_chunks, split_array)]
+use colored::Colorize;
 use fxhash::FxHashMap;
+use ptr_hash::{PtrHash, PtrHashParams};
 use std::{
     env::args,
     io::Read,
     simd::{Simd, SimdPartialEq, ToBitMask},
+    vec::Vec,
 };
 
 #[derive(Clone)]
+#[repr(align(64))]
 struct Record {
     count: u32,
     min: V,
@@ -141,7 +145,39 @@ fn to_str(name: &[u8]) -> &str {
     std::str::from_utf8(name).unwrap()
 }
 
+fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, Vec<Record>) {
+    let mut cities_map = FxHashMap::default();
+
+    iter_lines(data, |name, _value| {
+        let key = to_key(name);
+        let name_in_map = *cities_map.entry(key).or_insert(name);
+        assert_eq!(name, name_in_map);
+    });
+
+    let mut cities = cities_map.into_iter().collect::<Vec<_>>();
+    cities.sort_unstable_by_key(|&(_key, name)| name);
+    let keys = cities.iter().map(|(k, _)| *k).collect::<Vec<_>>();
+
+    let num_slots = 2 * cities.len();
+    let params = ptr_hash::PtrHashParams {
+        alpha: 0.9,
+        c: 1.2,
+        slots_per_part: num_slots,
+        ..PtrHashParams::default()
+    };
+    eprint!("build \r");
+    let start = std::time::Instant::now();
+    let ptrhash = PtrHash::new(&keys, params);
+    eprintln!(
+        "build {}",
+        format!("{:>5.1?}", start.elapsed()).bold().green()
+    );
+    let h = vec![Record::default(); num_slots];
+    (cities, ptrhash, h)
+}
+
 fn main() {
+    let start = std::time::Instant::now();
     let filename = &args().nth(1).unwrap_or("measurements.txt".to_string());
     let mut data = vec![];
     let offset;
@@ -155,34 +191,29 @@ fn main() {
         assert!(offset < L);
         data.resize(offset, 0);
         let mut file = std::fs::File::open(filename).unwrap();
-        eprint!("read ..");
+        eprint!("read  ");
+        let start = std::time::Instant::now();
         file.read_to_end(&mut data).unwrap();
-        eprintln!("done");
+        eprintln!("{}", format!("{:>5.1?}", start.elapsed()).bold().green());
     }
 
     // Guaranteed to be aligned for SIMD.
     let data = &data[offset..];
 
-    let mut h = FxHashMap::default();
+    // Build a perfect hash function on the cities found in the first 100k characters.
+    let (cities, phf, mut records) = build_perfect_hash(&data[..100000]);
 
     let callback = |name, value| {
         let key = to_key(name);
-        let entry = h.entry(key).or_insert((Record::default(), name));
-        entry.0.add(parse(value));
-        debug_assert_eq!(
-            entry.1,
-            name,
-            "{} != {}\nkey: {key:064b}",
-            to_str(entry.1),
-            to_str(name)
-        );
+        let index = phf.index(&key);
+        let entry = unsafe { records.get_unchecked_mut(index) };
+        entry.add(parse(value));
     };
     iter_lines(data, callback);
 
-    let mut v = h.into_iter().collect::<Vec<_>>();
-    v.sort_unstable_by_key(|p| p.1 .1);
     if false {
-        for (_key, (r, name)) in &v {
+        for (key, name) in &cities {
+            let r = &records[phf.index(key)];
             println!(
                 "{}: {}/{}/{}",
                 to_str(name),
@@ -191,10 +222,15 @@ fn main() {
                 format(r.max)
             );
         }
+        let min_len = cities.iter().map(|x| x.1.len()).min().unwrap();
+        let max_len = cities.iter().map(|x| x.1.len()).max().unwrap();
+        eprintln!("Min city len: {min_len}");
+        eprintln!("Max city len: {max_len}");
     }
-    eprintln!("Num cities: {}", v.len());
-    let min_len = v.iter().map(|x| x.1 .1.len()).min().unwrap();
-    let max_len = v.iter().map(|x| x.1 .1.len()).max().unwrap();
-    eprintln!("Min city len: {min_len}");
-    eprintln!("Max city len: {max_len}");
+    eprintln!("cities {}", cities.len());
+
+    eprintln!(
+        "total: {}",
+        format!("{:>5.1?}", start.elapsed()).bold().green()
+    );
 }

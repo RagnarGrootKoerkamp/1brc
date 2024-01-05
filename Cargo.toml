@@ -5,7 +5,10 @@ edition = "2021"
 default-run = "one-billion-row-challenge"
 
 [profile.release]
+lto = "thin"
 debug = true
 
 [dependencies]
+colored = "2.1.0"
 fxhash = "0.2.1"
+ptr_hash = { path = "../eth/git/ptr_hash" }
