@@ -169,15 +169,15 @@ fn main() {
 
     let mut v = h.into_iter().collect::<Vec<_>>();
     v.sort_unstable_by_key(|p| p.0);
-    for (_key, (r, name)) in &v {
-        println!(
-            "{}: {}/{}/{}",
-            std::str::from_utf8(name).unwrap(),
-            format(r.min),
-            format(r.avg()),
-            format(r.max)
-        );
-    }
+    // for (_key, (r, name)) in &v {
+    //     println!(
+    //         "{}: {}/{}/{}",
+    //         std::str::from_utf8(name).unwrap(),
+    //         format(r.min),
+    //         format(r.avg()),
+    //         format(r.max)
+    //     );
+    // }
     eprintln!("Num cities: {}", v.len());
     let min_len = v.iter().map(|x| x.1 .1.len()).min().unwrap();
     let max_len = v.iter().map(|x| x.1 .1.len()).max().unwrap();
