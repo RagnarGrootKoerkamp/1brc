@@ -6,6 +6,7 @@ use std::{
     simd::{Simd, SimdPartialEq, ToBitMask},
 };
 
+#[derive(Clone)]
 struct Record {
     count: u32,
     min: V,
@@ -70,11 +71,16 @@ fn format(v: V) -> String {
 fn to_key(name: &[u8]) -> u64 {
     // Hash the first and last 8 bytes.
     let head: [u8; 8] = unsafe { *name.get_unchecked(..8).split_array_ref().0 };
-    let tail: [u8; 8] = unsafe { *name.get_unchecked(name.len() - 8..).split_array_ref().0 };
+    let tail: [u8; 8] = unsafe {
+        *name
+            .get_unchecked(name.len().wrapping_sub(8)..)
+            .split_array_ref()
+            .0
+    };
     let shift = 64usize.saturating_sub(8 * name.len());
     let khead = u64::from_ne_bytes(head) << shift;
     let ktail = u64::from_ne_bytes(tail) >> shift;
-    khead + ktail
+    khead.wrapping_add(ktail)
 }
 
 /// Number of SIMD lanes. AVX2 has 256 bits, so 32 lanes.
@@ -149,8 +155,11 @@ fn main() {
         assert!(offset < L);
         data.resize(offset, 0);
         let mut file = std::fs::File::open(filename).unwrap();
+        eprint!("read ..");
         file.read_to_end(&mut data).unwrap();
+        eprintln!("done");
     }
+
     // Guaranteed to be aligned for SIMD.
     let data = &data[offset..];
 
