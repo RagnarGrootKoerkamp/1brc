@@ -1,8 +1,7 @@
-#![feature(slice_split_once, portable_simd, slice_as_chunks)]
-use fxhash::{FxHashMap, FxHasher};
+#![feature(slice_split_once, portable_simd, slice_as_chunks, split_array)]
+use fxhash::FxHashMap;
 use std::{
     env::args,
-    hash::Hasher,
     io::Read,
     simd::{Simd, SimdPartialEq, ToBitMask},
 };
@@ -53,7 +52,7 @@ fn parse(mut s: &[u8]) -> V {
         [c] => (0, 0, 0, c - b'0'),
         [b, c] => (0, b - b'0', c - b'0', 0),
         [a, b, c] => (a - b'0', b - b'0', c - b'0', 0),
-        _ => panic!("Unknown pattern {:?}", std::str::from_utf8(s).unwrap()),
+        _ => panic!("Unknown pattern {:?}", to_str(s)),
     };
     let v = a as V * 1000 + b as V * 100 + c as V * 10 + d as V;
     if neg {
@@ -67,11 +66,6 @@ fn format(v: V) -> String {
     format!("{:.1}", v as f64 / 10.0)
 }
 
-fn to_key_fx(name: &[u8]) -> u64 {
-    let mut h = FxHasher::default();
-    h.write(name);
-    h.finish()
-}
 #[allow(unused)]
 fn to_key(name: &[u8]) -> u64 {
     let mut key = [0u8; 8];
@@ -138,6 +132,10 @@ fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) 
     }
 }
 
+fn to_str(name: &[u8]) -> &str {
+    std::str::from_utf8(name).unwrap()
+}
+
 fn main() {
     let filename = &args().nth(1).unwrap_or("measurements.txt".to_string());
     let mut data = vec![];
@@ -160,24 +158,32 @@ fn main() {
     let mut h = FxHashMap::default();
 
     let callback = |name, value| {
-        h.entry(to_key_fx(name))
-            .or_insert((Record::default(), name))
-            .0
-            .add(parse(value));
+        let key = to_key(name);
+        let entry = h.entry(key).or_insert((Record::default(), name));
+        entry.0.add(parse(value));
+        debug_assert_eq!(
+            entry.1,
+            name,
+            "{} != {}\nkey: {key:064b}",
+            to_str(entry.1),
+            to_str(name)
+        );
     };
     iter_lines(data, callback);
 
     let mut v = h.into_iter().collect::<Vec<_>>();
-    v.sort_unstable_by_key(|p| p.0);
-    // for (_key, (r, name)) in &v {
-    //     println!(
-    //         "{}: {}/{}/{}",
-    //         std::str::from_utf8(name).unwrap(),
-    //         format(r.min),
-    //         format(r.avg()),
-    //         format(r.max)
-    //     );
-    // }
+    v.sort_unstable_by_key(|p| p.1 .1);
+    if false {
+        for (_key, (r, name)) in &v {
+            println!(
+                "{}: {}/{}/{}",
+                to_str(name),
+                format(r.min),
+                format(r.avg()),
+                format(r.max)
+            );
+        }
+    }
     eprintln!("Num cities: {}", v.len());
     let min_len = v.iter().map(|x| x.1 .1.len()).min().unwrap();
     let max_len = v.iter().map(|x| x.1 .1.len()).max().unwrap();
