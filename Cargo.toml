@@ -7,6 +7,7 @@ default-run = "one-billion-row-challenge"
 [profile.release]
 lto = "thin"
 debug = true
+incremental = true
 
 [dependencies]
 colored = "2.1.0"

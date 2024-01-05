@@ -102,39 +102,44 @@ fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) 
     let sep = S::splat(b';');
     let end = S::splat(b'\n');
     let mut start_pos = 0;
-    let mut i = 0;
-    let mut eq_sep = sep.simd_eq(simd_data[i]).to_bitmask();
-    let mut eq_end = end.simd_eq(simd_data[i]).to_bitmask();
+
+    let eq_step = |i: &mut usize| {
+        *i += 2;
+        let simd = simd_data[*i];
+        let eq_sep_l = sep.simd_eq(simd).to_bitmask() as u64;
+        let eq_end_l = end.simd_eq(simd).to_bitmask() as u64;
+        let simd = simd_data[*i + 1];
+        let eq_sep_h = sep.simd_eq(simd).to_bitmask() as u64;
+        let eq_end_h = end.simd_eq(simd).to_bitmask() as u64;
+        ((eq_sep_h << 32) + eq_sep_l, (eq_end_h << 32) + eq_end_l)
+    };
+    let i = &mut (-2isize as usize);
+    let (mut eq_sep, mut eq_end) = eq_step(i);
 
     // TODO: Handle the tail.
-    while i < simd_data.len() - 2 {
+    while *i < simd_data.len() - 3 {
         // find ; separator
         // TODO if?
         while eq_sep == 0 {
-            i += 1;
-            eq_sep = sep.simd_eq(simd_data[i]).to_bitmask();
-            eq_end = end.simd_eq(simd_data[i]).to_bitmask();
+            (eq_sep, eq_end) = eq_step(i);
         }
         let offset = eq_sep.trailing_zeros();
         eq_sep ^= 1 << offset;
-        let sep_pos = L * i + offset as usize;
+        let sep_pos = L * *i + offset as usize;
 
         // find \n newline
         // TODO if?
         while eq_end == 0 {
-            i += 1;
-            eq_sep = sep.simd_eq(simd_data[i]).to_bitmask();
-            eq_end = end.simd_eq(simd_data[i]).to_bitmask();
+            (eq_sep, eq_end) = eq_step(i);
         }
         let offset = eq_end.trailing_zeros();
         eq_end ^= 1 << offset;
-        let end_pos = L * i + offset as usize;
+        let end_pos = L * *i + offset as usize;
 
         unsafe {
-            callback(
-                data.get_unchecked(start_pos..sep_pos),
-                data.get_unchecked(sep_pos + 1..end_pos),
-            );
+            let name = data.get_unchecked(start_pos..sep_pos);
+            let value = data.get_unchecked(sep_pos + 1..end_pos);
+            callback(name, value);
         }
 
         start_pos = end_pos + 1;
