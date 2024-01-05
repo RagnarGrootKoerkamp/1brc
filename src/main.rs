@@ -68,14 +68,13 @@ fn format(v: V) -> String {
 
 #[allow(unused)]
 fn to_key(name: &[u8]) -> u64 {
-    let mut key = [0u8; 8];
-    let l = name.len().min(8);
-    unsafe {
-        key.get_unchecked_mut(..l)
-            .copy_from_slice(name.get_unchecked(..l));
-    }
-    let k = u64::from_ne_bytes(key);
-    k ^ name.len() as u64
+    // Hash the first and last 8 bytes.
+    let head: [u8; 8] = unsafe { *name.get_unchecked(..8).split_array_ref().0 };
+    let tail: [u8; 8] = unsafe { *name.get_unchecked(name.len() - 8..).split_array_ref().0 };
+    let shift = 64usize.saturating_sub(8 * name.len());
+    let khead = u64::from_ne_bytes(head) << shift;
+    let ktail = u64::from_ne_bytes(tail) >> shift;
+    khead + ktail
 }
 
 /// Number of SIMD lanes. AVX2 has 256 bits, so 32 lanes.
