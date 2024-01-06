@@ -54,9 +54,9 @@ fn parse(mut s: &[u8]) -> V {
         [c, b'.', d] => (0, 0, c - b'0', d - b'0'),
         [b, c, b'.', d] => (0, b - b'0', c - b'0', d - b'0'),
         [a, b, c, b'.', d] => (a - b'0', b - b'0', c - b'0', d - b'0'),
-        [c] => (0, 0, 0, c - b'0'),
-        [b, c] => (0, b - b'0', c - b'0', 0),
-        [a, b, c] => (a - b'0', b - b'0', c - b'0', 0),
+        // [c] => (0, 0, 0, c - b'0'),
+        // [b, c] => (0, b - b'0', c - b'0', 0),
+        // [a, b, c] => (a - b'0', b - b'0', c - b'0', 0),
         _ => panic!("Unknown pattern {:?}", to_str(s)),
     };
     let v = a as V * 1000 + b as V * 100 + c as V * 10 + d as V;
