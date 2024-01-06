@@ -161,6 +161,13 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, Vec<Record>) 
     cities.sort_unstable_by_key(|&(_key, name)| name);
     let keys = cities.iter().map(|(k, _)| *k).collect::<Vec<_>>();
 
+    eprintln!("cities {}", keys.len());
+    let min_len = cities.iter().map(|x| x.1.len()).min().unwrap();
+    let max_len = cities.iter().map(|x| x.1.len()).max().unwrap();
+    eprintln!("Min city len: {min_len}");
+    eprintln!("Max city len: {max_len}");
+    assert!(keys.len() <= 413);
+
     let num_slots = 2 * cities.len();
     let params = ptr_hash::PtrHashParams {
         alpha: 0.9,
@@ -212,7 +219,13 @@ fn main() {
         let entry = unsafe { records.get_unchecked_mut(index) };
         entry.add(parse(value));
     };
+
+    let iter_start = std::time::Instant::now();
     iter_lines(data, callback);
+    eprintln!(
+        "iter:  {}",
+        format!("{:>5.2?}", iter_start.elapsed()).bold().green()
+    );
 
     if false {
         for (key, name) in &cities {
@@ -225,15 +238,10 @@ fn main() {
                 format(r.max)
             );
         }
-        let min_len = cities.iter().map(|x| x.1.len()).min().unwrap();
-        let max_len = cities.iter().map(|x| x.1.len()).max().unwrap();
-        eprintln!("Min city len: {min_len}");
-        eprintln!("Max city len: {max_len}");
     }
-    eprintln!("cities {}", cities.len());
 
     eprintln!(
         "total: {}",
-        format!("{:>5.1?}", start.elapsed()).bold().green()
+        format!("{:>5.2?}", start.elapsed()).bold().green()
     );
 }
