@@ -1,4 +1,5 @@
 #![feature(slice_split_once, portable_simd, slice_as_chunks, split_array)]
+#![allow(unused)]
 use colored::Colorize;
 use fxhash::FxHashMap;
 use ptr_hash::{PtrHash, PtrHashParams};
@@ -148,13 +149,20 @@ fn to_str(name: &[u8]) -> &str {
     std::str::from_utf8(name).unwrap()
 }
 
+#[inline(never)]
 fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, Vec<Record>) {
     let mut cities_map = FxHashMap::default();
 
     iter_lines(data, |name, _value| {
         let key = to_key(name);
         let name_in_map = *cities_map.entry(key).or_insert(name);
-        assert_eq!(name, name_in_map);
+        assert_eq!(
+            name,
+            name_in_map,
+            "existing = {}  != {} = inserting",
+            to_str(name),
+            to_str(name_in_map)
+        );
     });
 
     let mut cities = cities_map.into_iter().collect::<Vec<_>>();
