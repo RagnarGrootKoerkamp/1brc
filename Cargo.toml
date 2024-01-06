@@ -10,6 +10,13 @@ debug = true
 incremental = true
 
 [dependencies]
+assert2 = "0.3.11"
 colored = "2.1.0"
 fxhash = "0.2.1"
+memmap2 = "0.9.3"
 ptr_hash = { path = "../eth/git/ptr_hash" }
+
+[dev-dependencies]
+anyhow = "1.0.79"
+rand = "0.8.5"
+rand_distr = "0.4.3"
