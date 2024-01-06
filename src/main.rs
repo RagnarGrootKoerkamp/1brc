@@ -166,7 +166,7 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, Vec<Record>) 
     let max_len = cities.iter().map(|x| x.1.len()).max().unwrap();
     eprintln!("Min city len: {min_len}");
     eprintln!("Max city len: {max_len}");
-    assert!(keys.len() <= 413);
+    assert!(keys.len() <= 500);
 
     let num_slots = 2 * cities.len();
     let params = ptr_hash::PtrHashParams {
@@ -190,24 +190,18 @@ fn main() {
     let start = std::time::Instant::now();
     let filename = &args().nth(1).unwrap_or("measurements.txt".to_string());
     let mut data = vec![];
-    let offset;
     {
-        let stat = std::fs::metadata(filename).unwrap();
-        data.reserve(stat.len() as usize + 2 * L);
-        // Some hacky stuff to make sure data is aligned to simd lanes.
-        data.resize(4 * L, 0);
-        let pre_aligned = unsafe { data.align_to::<S>().0 };
-        offset = pre_aligned.len();
-        assert!(offset < L);
-        data.resize(offset, 0);
-        let mut file = std::fs::File::open(filename).unwrap();
         eprint!("read  ");
+        let stat = std::fs::metadata(filename).unwrap();
+        let mut file = std::fs::File::open(filename).unwrap();
         let start = std::time::Instant::now();
+        data.reserve(stat.len() as usize + 1);
         file.read_to_end(&mut data).unwrap();
         eprintln!("{}", format!("{:>5.1?}", start.elapsed()).bold().green());
     }
 
-    // Guaranteed to be aligned for SIMD.
+    // Guarantee data to be aligned for SIMD.
+    let offset = unsafe { data.align_to::<S>().0.len() };
     let data = &data[offset..];
 
     // Build a perfect hash function on the cities found in the first 100k characters.
