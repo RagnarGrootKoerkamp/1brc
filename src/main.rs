@@ -2,6 +2,7 @@
 #![allow(unused)]
 use colored::Colorize;
 use fxhash::FxHashMap;
+use memmap2::Mmap;
 use ptr_hash::{PtrHash, PtrHashParams};
 use std::{
     env::args,
@@ -197,18 +198,18 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, Vec<Record>) 
 fn main() {
     let start = std::time::Instant::now();
     let filename = &args().nth(1).unwrap_or("measurements.txt".to_string());
-    let mut data = vec![];
+    let mut mmap: Mmap;
+    let mut data;
     {
-        eprint!("read  ");
-        let stat = std::fs::metadata(filename).unwrap();
+        eprint!("mmap  ");
         let mut file = std::fs::File::open(filename).unwrap();
         let start = std::time::Instant::now();
-        data.reserve(stat.len() as usize + 1);
-        file.read_to_end(&mut data).unwrap();
+        mmap = unsafe { Mmap::map(&file).unwrap() };
+        data = &*mmap;
         eprintln!("{}", format!("{:>5.1?}", start.elapsed()).bold().green());
     }
 
-    // Guarantee data to be aligned for SIMD.
+    // Guaranteed to be aligned for SIMD.
     let offset = unsafe { data.align_to::<S>().0.len() };
     let data = &data[offset..];
 
