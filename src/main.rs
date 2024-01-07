@@ -38,6 +38,12 @@ impl Record {
     fn avg(&self) -> V {
         self.sum / self.count as V
     }
+    fn merge(&mut self, other: &Self) {
+        self.count += other.count;
+        self.sum += other.sum;
+        self.min = self.min.min(other.min);
+        self.max = self.max.max(other.max);
+    }
 }
 
 type V = i32;
@@ -98,8 +104,9 @@ type S = Simd<u8, L>;
 /// and calls `callback` for each line.
 #[inline(always)]
 fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) {
-    // TODO: Handle the tail.
-    let simd_data: &[S] = unsafe { data.align_to::<S>().1 };
+    // TODO: Handle the head and tail.
+    let (head, simd_data, _tail) = unsafe { data.align_to::<S>() };
+    let data = &data[head.len()..];
 
     let sep = S::splat(b';');
     let end = S::splat(b'\n');
@@ -117,6 +124,11 @@ fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) 
     };
     let i = &mut (-2isize as usize);
     let (mut eq_sep, mut eq_end) = eq_step(i);
+
+    if eq_end.trailing_zeros() < eq_sep.trailing_zeros() {
+        let offset = eq_end.trailing_zeros();
+        eq_end ^= 1 << offset;
+    }
 
     // TODO: Handle the tail.
     while *i < simd_data.len() - 3 {
@@ -148,15 +160,14 @@ fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) 
 
 /// Parallel version of `iter_lines`.
 fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
+    // Each thread has its own accumulator.
     let mut slots = vec![Record::default(); num_slots];
-
     iter_lines(data, |name, value| {
         let key = to_key(name);
         let index = phf.index(&key);
         let entry = unsafe { slots.get_unchecked_mut(index) };
         entry.add(parse(value));
     });
-
     slots
 }
 
