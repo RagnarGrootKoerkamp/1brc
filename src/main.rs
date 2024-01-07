@@ -146,12 +146,26 @@ fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) 
     }
 }
 
+/// Parallel version of `iter_lines`.
+fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
+    let mut slots = vec![Record::default(); num_slots];
+
+    iter_lines(data, |name, value| {
+        let key = to_key(name);
+        let index = phf.index(&key);
+        let entry = unsafe { slots.get_unchecked_mut(index) };
+        entry.add(parse(value));
+    });
+
+    slots
+}
+
 fn to_str(name: &[u8]) -> &str {
     std::str::from_utf8(name).unwrap()
 }
 
 #[inline(never)]
-fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, Vec<Record>) {
+fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
     let mut cities_map = FxHashMap::default();
 
     iter_lines(data, |name, _value| {
@@ -191,8 +205,7 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, Vec<Record>) 
         "build {}",
         format!("{:>5.1?}", start.elapsed()).bold().green()
     );
-    let h = vec![Record::default(); num_slots];
-    (cities, ptrhash, h)
+    (cities, ptrhash, num_slots)
 }
 
 fn main() {
@@ -214,17 +227,10 @@ fn main() {
     let data = &data[offset..];
 
     // Build a perfect hash function on the cities found in the first 100k characters.
-    let (cities, phf, mut records) = build_perfect_hash(&data[..100000]);
-
-    let callback = |name, value| {
-        let key = to_key(name);
-        let index = phf.index(&key);
-        let entry = unsafe { records.get_unchecked_mut(index) };
-        entry.add(parse(value));
-    };
+    let (cities, phf, num_slots) = build_perfect_hash(&data[..100000]);
 
     let iter_start = std::time::Instant::now();
-    iter_lines(data, callback);
+    let records = run(data, &phf, num_slots);
     eprintln!(
         "iter:  {}",
         format!("{:>5.2?}", iter_start.elapsed()).bold().green()
