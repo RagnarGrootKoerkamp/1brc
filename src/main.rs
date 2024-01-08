@@ -3,7 +3,7 @@
 use colored::Colorize;
 use fxhash::FxHashMap;
 use memmap2::Mmap;
-use ptr_hash::{PtrHash, PtrHashParams};
+use ptr_hash::PtrHashParams;
 use std::{
     env::args,
     io::Read,
@@ -12,6 +12,8 @@ use std::{
 };
 
 type V = i32;
+
+type PtrHash = ptr_hash::DefaultPtrHash<ptr_hash::hash::FxHash, u64>;
 
 #[derive(Clone)]
 #[repr(align(64))]

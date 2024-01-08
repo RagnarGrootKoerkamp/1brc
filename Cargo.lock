@@ -652,6 +652,7 @@ dependencies = [
 [[package]]
 name = "ptr_hash"
 version = "0.1.1"
+source = "git+https://github.com/ragnargrootkoerkamp/ptrhash#422dae153daf3431dd085ea0ac567fb2ac2ae44a"
 dependencies = [
  "anyhow",
  "bitvec",
