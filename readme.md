@@ -14,3 +14,10 @@ On my `i7-10750H CPU` running at `4.6GHz`, this results in:
 - 1.43s wall time on 6 threads.
 
 
+## While you're here
+The `justfile` contains some often used commands that can be run using [`just`](https://github.com/casey/just).
+
+For this project, I wrote a small shell
+[`just-shell`](https://github.com/RagnarGrootKoerkamp/just-shell) to
+conveniently run `just` commands. It has super aggressive auto-completion, which
+makes running a small set of commands very convenient.
