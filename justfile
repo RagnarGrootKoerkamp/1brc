@@ -1,12 +1,12 @@
 run:
-    cargo run -r
+    cargo run -r --quiet
 small:
-    cargo run -- measurements-small.txt
+    cargo run --quiet -- measurements-small.txt
 flame:
     cargo flamegraph --open
 stat:
     cargo build -r --quiet
-    perf stat -d cargo run -r
+    perf stat cargo run -r
 record:
     cargo build -r --quiet
     perf record cargo run -r

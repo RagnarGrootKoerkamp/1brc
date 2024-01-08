@@ -11,6 +11,8 @@ use std::{
     vec::Vec,
 };
 
+type V = i32;
+
 #[derive(Clone)]
 #[repr(align(64))]
 struct Record {
@@ -45,8 +47,6 @@ impl Record {
         self.max = self.max.max(other.max);
     }
 }
-
-type V = i32;
 
 fn parse(mut s: &[u8]) -> V {
     let neg = unsafe {
@@ -216,11 +216,11 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
     cities.sort_unstable_by_key(|&(_key, name)| name);
     let keys = cities.iter().map(|(k, _)| *k).collect::<Vec<_>>();
 
-    eprintln!("cities {}", keys.len());
-    let min_len = cities.iter().map(|x| x.1.len()).min().unwrap();
-    let max_len = cities.iter().map(|x| x.1.len()).max().unwrap();
-    eprintln!("Min city len: {min_len}");
-    eprintln!("Max city len: {max_len}");
+    // eprintln!("cities {}", keys.len());
+    // let min_len = cities.iter().map(|x| x.1.len()).min().unwrap();
+    // let max_len = cities.iter().map(|x| x.1.len()).max().unwrap();
+    // eprintln!("Min city len: {min_len}");
+    // eprintln!("Max city len: {max_len}");
     assert!(keys.len() <= 500);
 
     let num_slots = 2 * cities.len();
@@ -246,12 +246,12 @@ fn main() {
     let mut mmap: Mmap;
     let mut data;
     {
-        eprint!("mmap  ");
+        // eprint!("mmap  ");
         let mut file = std::fs::File::open(filename).unwrap();
         let start = std::time::Instant::now();
         mmap = unsafe { Mmap::map(&file).unwrap() };
         data = &*mmap;
-        eprintln!("{}", format!("{:>5.1?}", start.elapsed()).bold().green());
+        // eprintln!("{}", format!("{:>5.1?}", start.elapsed()).bold().green());
     }
 
     // Guaranteed to be aligned for SIMD.
