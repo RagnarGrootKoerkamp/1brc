@@ -14,7 +14,7 @@ type V = i32;
 type PtrHash = ptr_hash::DefaultPtrHash<ptr_hash::hash::FxHash, u64>;
 
 #[derive(Clone)]
-#[repr(align(64))]
+#[repr(align(32))]
 struct Record {
     count: u32,
     min: V,
@@ -26,15 +26,15 @@ impl Record {
     fn default() -> Self {
         Self {
             count: 0,
-            min: i32::MAX,
-            max: i32::MIN,
+            min: V::MAX,
+            max: V::MIN,
             sum: 0,
         }
     }
     fn add(&mut self, value: V) {
         self.count += 1;
         self.sum += value;
-        self.min = self.min.min(value);
+        self.min = self.min.max(-value);
         self.max = self.max.max(value);
     }
     fn avg(&self) -> V {
@@ -43,7 +43,7 @@ impl Record {
     fn merge(&mut self, other: &Self) {
         self.count += other.count;
         self.sum += other.sum;
-        self.min = self.min.min(other.min);
+        self.min = self.min.max(other.min);
         self.max = self.max.max(other.max);
     }
 }
@@ -247,7 +247,7 @@ fn main() {
             println!(
                 "{}: {}/{}/{}",
                 to_str(name),
-                format(r.min),
+                format(-r.min),
                 format(r.avg()),
                 format(r.max)
             );
