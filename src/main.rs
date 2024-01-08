@@ -58,16 +58,14 @@ fn parse(mut s: &[u8]) -> V {
         }
     };
     // s = abc.d
-    let (a, b, c, d) = match s {
-        [c, _, d] => (0, 0, c - b'0', d - b'0'),
-        [b, c, _, d] => (0, b - b'0', c - b'0', d - b'0'),
-        [a, b, c, _, d] => (a - b'0', b - b'0', c - b'0', d - b'0'),
-        // [c] => (0, 0, 0, c - b'0'),
-        // [b, c] => (0, b - b'0', c - b'0', 0),
-        // [a, b, c] => (a - b'0', b - b'0', c - b'0', 0),
-        _ => panic!("Unknown pattern {:?}", to_str(s)),
-    };
-    let v = a as V * 1000 + b as V * 100 + c as V * 10 + d as V;
+    let a = unsafe { *s.get_unchecked(s.len() - 5) };
+    let b = unsafe { *s.get_unchecked(s.len() - 4) };
+    let c = unsafe { *s.get_unchecked(s.len() - 3) };
+    let d = unsafe { *s.get_unchecked(s.len() - 1) };
+    let v = a as V * 1000 * (s.len() >= 5) as V
+        + b as V * 100 * (s.len() >= 4) as V
+        + c as V * 10
+        + d as V;
     if neg {
         -v
     } else {
