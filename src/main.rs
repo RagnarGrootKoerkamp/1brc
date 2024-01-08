@@ -102,9 +102,8 @@ type S = Simd<u8, L>;
 /// and calls `callback` for each line.
 #[inline(always)]
 fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) {
-    let first_end = data.iter().position(|&c| c == b'\n').unwrap();
     // Make sure that the out-of-bounds reads we do are OK.
-    data = &data[first_end + 1..data.len() - 32];
+    data = &data[..data.len() - 32];
 
     let sep = S::splat(b';');
     let end = S::splat(b'\n');
@@ -116,20 +115,35 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8
         last + offset
     };
 
-    let mut sep_pos = 0;
-    let mut start_pos = 0;
+    struct State {
+        sep_pos: usize,
+        start_pos: usize,
+    }
+    let mut init_state = |idx: usize| {
+        let first_end = idx + data[idx..].iter().position(|&c| c == b'\n').unwrap();
+        State {
+            sep_pos: first_end,
+            start_pos: first_end,
+        }
+    };
 
-    while start_pos < data.len() {
-        sep_pos = find(sep_pos, sep) + 1;
-        let end_pos = find(sep_pos, end) + 1;
+    let mut state = init_state(0);
+
+    let mut step = |state: &mut State| {
+        state.sep_pos = find(state.sep_pos, sep) + 1;
+        let end_pos = find(state.sep_pos, end) + 1;
 
         unsafe {
-            let name = data.get_unchecked(start_pos..sep_pos - 1);
-            let value = data.get_unchecked(sep_pos..end_pos - 1);
+            let name = data.get_unchecked(state.start_pos..state.sep_pos - 1);
+            let value = data.get_unchecked(state.sep_pos..end_pos - 1);
             callback(name, value);
         }
 
-        start_pos = end_pos;
+        state.start_pos = end_pos;
+    };
+
+    while state.start_pos < data.len() {
+        step(&mut state);
     }
 }
 
