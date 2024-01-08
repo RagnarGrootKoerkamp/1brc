@@ -101,58 +101,34 @@ type S = Simd<u8, L>;
 /// Find the regions between \n and ; (names) and between ; and \n (values),
 /// and calls `callback` for each line.
 #[inline(always)]
-fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) {
-    // TODO: Handle the head and tail.
-    let (head, simd_data, _tail) = unsafe { data.align_to::<S>() };
-    let data = &data[head.len()..];
+fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) {
+    let first_end = data.iter().position(|&c| c == b'\n').unwrap();
+    data = &data[first_end + 1..];
 
     let sep = S::splat(b';');
     let end = S::splat(b'\n');
+
+    let mut find = |mut last: usize, sep: S| {
+        let simd = S::from_array(unsafe { *data.get_unchecked(last..).as_ptr().cast() });
+        let eq = sep.simd_eq(simd).to_bitmask();
+        let offset = eq.trailing_zeros() as usize;
+        last + offset
+    };
+
+    let mut sep_pos = 0;
     let mut start_pos = 0;
 
-    let eq_step = |i: &mut usize| {
-        *i += 2;
-        let simd = simd_data[*i];
-        let eq_sep_l = sep.simd_eq(simd).to_bitmask() as u64;
-        let eq_end_l = end.simd_eq(simd).to_bitmask() as u64;
-        let simd = simd_data[*i + 1];
-        let eq_sep_h = sep.simd_eq(simd).to_bitmask() as u64;
-        let eq_end_h = end.simd_eq(simd).to_bitmask() as u64;
-        ((eq_sep_h << 32) + eq_sep_l, (eq_end_h << 32) + eq_end_l)
-    };
-    let i = &mut (-2isize as usize);
-    let (mut eq_sep, mut eq_end) = eq_step(i);
-
-    if eq_end.trailing_zeros() < eq_sep.trailing_zeros() {
-        let offset = eq_end.trailing_zeros();
-        eq_end ^= 1 << offset;
-    }
-
-    // TODO: Handle the tail.
-    while *i < simd_data.len() - 3 {
-        // find ; separator
-        if eq_sep == 0 {
-            (eq_sep, eq_end) = eq_step(i);
-        }
-        let offset = eq_sep.trailing_zeros();
-        eq_sep ^= 1 << offset;
-        let sep_pos = L * *i + offset as usize;
-
-        // find \n newline
-        if eq_end == 0 {
-            (eq_sep, eq_end) = eq_step(i);
-        }
-        let offset = eq_end.trailing_zeros();
-        eq_end ^= 1 << offset;
-        let end_pos = L * *i + offset as usize;
+    while start_pos < data.len() - 32 {
+        sep_pos = find(sep_pos, sep) + 1;
+        let end_pos = find(sep_pos, end) + 1;
 
         unsafe {
-            let name = data.get_unchecked(start_pos..sep_pos);
-            let value = data.get_unchecked(sep_pos + 1..end_pos);
+            let name = data.get_unchecked(start_pos..sep_pos - 1);
+            let value = data.get_unchecked(sep_pos..end_pos - 1);
             callback(name, value);
         }
 
-        start_pos = end_pos + 1;
+        start_pos = end_pos;
     }
 }
 
