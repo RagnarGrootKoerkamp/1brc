@@ -1,12 +1,10 @@
 #![feature(slice_split_once, portable_simd, slice_as_chunks, split_array)]
-#![allow(unused)]
 use colored::Colorize;
 use fxhash::FxHashMap;
 use memmap2::Mmap;
 use ptr_hash::PtrHashParams;
 use std::{
     env::args,
-    io::Read,
     simd::{Simd, SimdPartialEq, ToBitMask},
     vec::Vec,
 };
@@ -110,7 +108,7 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8
     let sep = S::splat(b';');
     let end = S::splat(b'\n');
 
-    let mut find = |mut last: usize, sep: S| {
+    let find = |last: usize, sep: S| {
         let simd = S::from_array(unsafe { *data.get_unchecked(last..).as_ptr().cast() });
         let eq = sep.simd_eq(simd).to_bitmask();
         let offset = eq.trailing_zeros() as usize;
@@ -121,7 +119,7 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8
         sep_pos: usize,
         start_pos: usize,
     }
-    let mut init_state = |idx: usize| {
+    let init_state = |idx: usize| {
         let first_end = idx + data[idx..].iter().position(|&c| c == b'\n').unwrap();
         State {
             sep_pos: first_end,
@@ -162,7 +160,7 @@ fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
 }
 
 fn run_parallel(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
-    let mut slots = std::sync::Mutex::new(vec![Record::default(); num_slots]);
+    let slots = std::sync::Mutex::new(vec![Record::default(); num_slots]);
 
     // Spawn one thread per core.
     let num_threads = std::thread::available_parallelism().unwrap();
@@ -223,28 +221,19 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
         slots_per_part: num_slots,
         ..PtrHashParams::default()
     };
-    eprint!("build \r");
-    let start = std::time::Instant::now();
     let ptrhash = PtrHash::new(&keys, params);
-    eprintln!(
-        "build {}",
-        format!("{:>5.1?}", start.elapsed()).bold().green()
-    );
     (cities, ptrhash, num_slots)
 }
 
 fn main() {
     let start = std::time::Instant::now();
     let filename = &args().nth(1).unwrap_or("measurements.txt".to_string());
-    let mut mmap: Mmap;
-    let mut data;
+    let mmap: Mmap;
+    let data;
     {
-        // eprint!("mmap  ");
-        let mut file = std::fs::File::open(filename).unwrap();
-        let start = std::time::Instant::now();
+        let file = std::fs::File::open(filename).unwrap();
         mmap = unsafe { Mmap::map(&file).unwrap() };
         data = &*mmap;
-        // eprintln!("{}", format!("{:>5.1?}", start.elapsed()).bold().green());
     }
 
     // Guaranteed to be aligned for SIMD.
@@ -254,12 +243,7 @@ fn main() {
     // Build a perfect hash function on the cities found in the first 100k characters.
     let (cities, phf, num_slots) = build_perfect_hash(&data[..100000]);
 
-    let iter_start = std::time::Instant::now();
     let records = run_parallel(data, &phf, num_slots);
-    eprintln!(
-        "iter:  {}",
-        format!("{:>5.2?}", iter_start.elapsed()).bold().green()
-    );
 
     if false {
         for (key, name) in &cities {
