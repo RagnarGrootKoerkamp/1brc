@@ -217,7 +217,7 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
     let num_slots = 2 * cities.len();
     let params = ptr_hash::PtrHashParams {
         alpha: 0.9,
-        c: 1.2,
+        c: 1.5,
         slots_per_part: num_slots,
         ..PtrHashParams::default()
     };
