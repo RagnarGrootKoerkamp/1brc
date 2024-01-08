@@ -154,7 +154,7 @@ fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
     let mut slots = vec![Record::default(); num_slots];
     iter_lines(data, |name, value| {
         let key = to_key(name);
-        let index = phf.index(&key);
+        let index = phf.index_single_part(&key);
         let entry = unsafe { slots.get_unchecked_mut(index) };
         entry.add(parse(value));
     });
@@ -263,7 +263,7 @@ fn main() {
 
     if false {
         for (key, name) in &cities {
-            let r = &records[phf.index(key)];
+            let r = &records[phf.index_single_part(key)];
             println!(
                 "{}: {}/{}/{}",
                 to_str(name),
