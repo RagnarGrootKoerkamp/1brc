@@ -158,7 +158,6 @@ fn iter_lines<'a>(data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) 
     }
 }
 
-/// Parallel version of `iter_lines`.
 fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
     // Each thread has its own accumulator.
     let mut slots = vec![Record::default(); num_slots];
@@ -169,6 +168,30 @@ fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
         entry.add(parse(value));
     });
     slots
+}
+
+fn run_parallel(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
+    let mut slots = std::sync::Mutex::new(vec![Record::default(); num_slots]);
+
+    // Spawn one thread per core.
+    let num_threads = std::thread::available_parallelism().unwrap();
+    std::thread::scope(|s| {
+        let chunks = data.chunks(data.len() / num_threads + 1);
+        for chunk in chunks {
+            s.spawn(|| {
+                // Each thread has its own accumulator.
+                let thread_slots = run(chunk, phf, num_slots);
+
+                // Merge results.
+                let mut slots = slots.lock().unwrap();
+                for (thread_slot, slot) in thread_slots.into_iter().zip(slots.iter_mut()) {
+                    slot.merge(&thread_slot);
+                }
+            });
+        }
+    });
+
+    slots.into_inner().unwrap()
 }
 
 fn to_str(name: &[u8]) -> &str {
@@ -241,7 +264,7 @@ fn main() {
     let (cities, phf, num_slots) = build_perfect_hash(&data[..100000]);
 
     let iter_start = std::time::Instant::now();
-    let records = run(data, &phf, num_slots);
+    let records = run_parallel(data, &phf, num_slots);
     eprintln!(
         "iter:  {}",
         format!("{:>5.2?}", iter_start.elapsed()).bold().green()
