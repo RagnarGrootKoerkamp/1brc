@@ -58,10 +58,10 @@ fn parse(mut s: &[u8]) -> V {
         }
     };
     // s = abc.d
-    let a = unsafe { *s.get_unchecked(s.len() - 5) };
-    let b = unsafe { *s.get_unchecked(s.len() - 4) };
-    let c = unsafe { *s.get_unchecked(s.len() - 3) };
-    let d = unsafe { *s.get_unchecked(s.len() - 1) };
+    let a = unsafe { *s.get_unchecked(s.len().wrapping_sub(5)) };
+    let b = unsafe { *s.get_unchecked(s.len().wrapping_sub(4)) };
+    let c = unsafe { *s.get_unchecked(s.len().wrapping_sub(3)) };
+    let d = unsafe { *s.get_unchecked(s.len().wrapping_sub(1)) };
     let v = a as V * 1000 * (s.len() >= 5) as V
         + b as V * 100 * (s.len() >= 4) as V
         + c as V * 10
