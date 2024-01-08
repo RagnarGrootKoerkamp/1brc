@@ -103,7 +103,8 @@ type S = Simd<u8, L>;
 #[inline(always)]
 fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) {
     let first_end = data.iter().position(|&c| c == b'\n').unwrap();
-    data = &data[first_end + 1..];
+    // Make sure that the out-of-bounds reads we do are OK.
+    data = &data[first_end + 1..data.len() - 32];
 
     let sep = S::splat(b';');
     let end = S::splat(b'\n');
@@ -118,7 +119,7 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8
     let mut sep_pos = 0;
     let mut start_pos = 0;
 
-    while start_pos < data.len() - 32 {
+    while start_pos < data.len() {
         sep_pos = find(sep_pos, sep) + 1;
         let end_pos = find(sep_pos, end) + 1;
 
