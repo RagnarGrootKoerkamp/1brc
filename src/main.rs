@@ -152,6 +152,10 @@ fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
 }
 
 fn run_parallel(data: &[u8], phf: &PtrHash, num_slots: usize, num_threads: usize) -> Vec<Record> {
+    if num_threads == 0 {
+        return run(data, phf, num_slots);
+    }
+
     let slots = std::sync::Mutex::new(vec![Record::default(); num_slots]);
 
     // Spawn one thread per core.
