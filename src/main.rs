@@ -49,25 +49,13 @@ impl Record {
     }
 }
 
-fn parse(mut s: &[u8]) -> V {
-    let neg = unsafe {
-        if *s.get_unchecked(0) == b'-' {
-            s = s.get_unchecked(1..);
-            true
-        } else {
-            false
-        }
-    };
+fn parse(s: &[u8]) -> V {
+    debug_assert!(s[0] != b'-');
     // s = bc.d
     let b = unsafe { *s.get_unchecked(s.len().wrapping_sub(4)) - b'0' };
     let c = unsafe { *s.get_unchecked(s.len().wrapping_sub(3)) - b'0' };
     let d = unsafe { *s.get_unchecked(s.len().wrapping_sub(1)) - b'0' };
-    let v = b as V * 100 * (s.len() >= 4) as V + c as V * 10 + d as V;
-    if neg {
-        -v
-    } else {
-        v
-    }
+    b as V * 100 * (s.len() >= 4) as V + c as V * 10 + d as V
 }
 
 fn format(v: V) -> String {
@@ -147,7 +135,14 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8
 fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
     // Each thread has its own accumulator.
     let mut slots = vec![Record::default(); num_slots];
-    iter_lines(data, |name, value| {
+    iter_lines(data, |mut name, mut value| {
+        // If value is negative, extend name by one character.
+        unsafe {
+            if value.get_unchecked(0) == &b'-' {
+                value = value.get_unchecked(1..);
+                name = name.get_unchecked(..name.len() + 1);
+            }
+        }
         let key = to_key(name);
         let index = phf.index_single_part(&key);
         let entry = unsafe { slots.get_unchecked_mut(index) };
@@ -197,6 +192,17 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
             to_str(name),
             to_str(name_in_map)
         );
+        // Do the same for the name with ; appended.
+        let name = unsafe { name.get_unchecked(..name.len() + 1) };
+        let key = to_key(name);
+        let name_in_map = *cities_map.entry(key).or_insert(name);
+        assert_eq!(
+            name,
+            name_in_map,
+            "existing = {}  != {} = inserting",
+            to_str(name),
+            to_str(name_in_map)
+        );
     });
 
     let mut cities = cities_map.into_iter().collect::<Vec<_>>();
@@ -208,7 +214,7 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
     // let max_len = cities.iter().map(|x| x.1.len()).max().unwrap();
     // eprintln!("Min city len: {min_len}");
     // eprintln!("Max city len: {max_len}");
-    assert!(keys.len() <= 500);
+    assert!(keys.len() <= 1000);
 
     let num_slots = 2 * cities.len();
     let params = ptr_hash::PtrHashParams {
