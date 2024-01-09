@@ -5,7 +5,7 @@ use memmap2::Mmap;
 use ptr_hash::PtrHashParams;
 use std::{
     env::args,
-    simd::{Simd, SimdPartialEq, ToBitMask},
+    simd::{cmp::SimdPartialEq, Simd},
     vec::Vec,
 };
 
