@@ -11,6 +11,7 @@ incremental = true
 
 [dependencies]
 assert2 = "0.3.11"
+clap = "4.4.14"
 colored = "2.1.0"
 fxhash = "0.2.1"
 memmap2 = "0.9.3"

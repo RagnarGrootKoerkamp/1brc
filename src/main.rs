@@ -1,11 +1,12 @@
 #![feature(slice_split_once, portable_simd, slice_as_chunks, split_array)]
+use clap::Parser;
 use colored::Colorize;
 use fxhash::FxHashMap;
 use memmap2::Mmap;
 use ptr_hash::PtrHashParams;
 use std::{
-    env::args,
     simd::{cmp::SimdPartialEq, Simd},
+    thread::available_parallelism,
     vec::Vec,
 };
 
@@ -155,11 +156,10 @@ fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
     slots
 }
 
-fn run_parallel(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
+fn run_parallel(data: &[u8], phf: &PtrHash, num_slots: usize, num_threads: usize) -> Vec<Record> {
     let slots = std::sync::Mutex::new(vec![Record::default(); num_slots]);
 
     // Spawn one thread per core.
-    let num_threads = std::thread::available_parallelism().unwrap();
     std::thread::scope(|s| {
         let chunks = data.chunks(data.len() / num_threads + 1);
         for chunk in chunks {
@@ -221,9 +221,19 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
     (cities, ptrhash, num_slots)
 }
 
+#[derive(clap::Parser)]
+struct Args {
+    input: Option<String>,
+
+    #[clap(short = 'j', long)]
+    threads: Option<usize>,
+}
+
 fn main() {
+    let args = Args::parse();
+
     let start = std::time::Instant::now();
-    let filename = &args().nth(1).unwrap_or("measurements.txt".to_string());
+    let filename = args.input.unwrap_or("measurements.txt".to_string());
     let mmap: Mmap;
     let data;
     {
@@ -239,7 +249,13 @@ fn main() {
     // Build a perfect hash function on the cities found in the first 100k characters.
     let (cities, phf, num_slots) = build_perfect_hash(&data[..100000]);
 
-    let records = run_parallel(data, &phf, num_slots);
+    let records = run_parallel(
+        data,
+        &phf,
+        num_slots,
+        args.threads
+            .unwrap_or(available_parallelism().unwrap().into()),
+    );
 
     if false {
         for (key, name) in &cities {

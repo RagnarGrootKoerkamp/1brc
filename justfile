@@ -1,5 +1,5 @@
-run:
-    cargo run -r --quiet
+run *args:
+    cargo run -r --quiet -- {{args}}
 small:
     cargo run --quiet -- measurements-small.txt
 flame:
