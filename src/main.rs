@@ -17,7 +17,7 @@ type PtrHash = ptr_hash::DefaultPtrHash<ptr_hash::hash::FxHash, u64>;
 #[derive(Clone)]
 #[repr(align(32))]
 struct Record {
-    count: u32,
+    count: V,
     min: V,
     max: V,
     sum: V,
@@ -27,7 +27,7 @@ impl Record {
     fn default() -> Self {
         Self {
             count: 0,
-            min: V::MAX,
+            min: V::MIN,
             max: V::MIN,
             sum: 0,
         }
@@ -95,7 +95,7 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8
 
     let find = |last: usize, sep: S| {
         let simd = S::from_array(unsafe { *data.get_unchecked(last..).as_ptr().cast() });
-        let eq = sep.simd_eq(simd).to_bitmask();
+        let eq = sep.simd_eq(simd).to_bitmask() as u32;
         let offset = eq.trailing_zeros() as usize;
         last + offset
     };
@@ -117,6 +117,8 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8
     let mut step = |state: &mut State| {
         state.sep_pos = find(state.sep_pos, sep) + 1;
         let end_pos = find(state.sep_pos, end) + 1;
+        assert2::debug_assert!(state.start_pos < state.sep_pos);
+        assert2::debug_assert!(state.sep_pos < end_pos);
 
         unsafe {
             let name = data.get_unchecked(state.start_pos..state.sep_pos - 1);
