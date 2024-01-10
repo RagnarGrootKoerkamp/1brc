@@ -24,9 +24,10 @@ type PtrHash = ptr_hash::DefaultPtrHash<ptr_hash::hash::FxHash, u64>;
 #[repr(align(32))]
 struct Record {
     count: V,
-    /// We actually store the negative of the minimal value seen.
-    min: V,
-    max: V,
+    /// Byte representation of string ~b"bc.d" or ~b"\0c.d".
+    min: u32,
+    /// Byte representation of string b"bc.d" or b"\0c.d".
+    max: u32,
     sum: V,
 }
 
@@ -34,17 +35,17 @@ impl Record {
     fn default() -> Self {
         Self {
             count: 0,
-            min: V::MIN / 2,
-            max: V::MIN / 2,
+            min: 0,
+            max: 0,
             sum: 0,
         }
     }
-    fn add(&mut self, value: V) {
+    fn add(&mut self, raw_value: u32, value: V) {
         assert2::debug_assert!(value < 1000);
         self.count += 1;
         self.sum += value;
-        self.min = self.min.max(-value);
-        self.max = self.max.max(value);
+        self.min = self.min.max(!raw_value);
+        self.max = self.max.max(raw_value);
     }
     fn merge(&mut self, other: &Self) {
         self.count += other.count;
@@ -60,25 +61,38 @@ impl Record {
         let sum = pos_sum - neg_sum;
         let avg = sum / (pos.count + neg.count);
 
-        let pos_max = pos.max - C;
-        let neg_max = -(-neg.min - C);
+        let pos_max = raw_to_value(pos.max);
+        let neg_max = -raw_to_value(!neg.min);
         let max = pos_max.max(neg_max);
 
-        let pos_min = -pos.min - C;
-        let neg_min = -(neg.max - C);
+        let pos_min = raw_to_value(!pos.min);
+        let neg_min = -raw_to_value(neg.max);
         let min = pos_min.min(neg_min);
 
         (min, avg, max)
     }
 }
 
-fn parse(data: &[u8], sep: usize, end: usize) -> V {
-    debug_assert!(data[sep + 1] != b'-');
+fn parse_lazy(data: &[u8], start: usize, end: usize) -> V {
+    debug_assert!(data[start] != b'-');
     // s = bc.d
     let b = unsafe { *data.get_unchecked(end - 4) as V - b'0' as V };
     let c = unsafe { *data.get_unchecked(end - 3) as V };
     let d = unsafe { *data.get_unchecked(end - 1) as V };
-    b as V * 100 * (end - sep >= 5) as V + c as V * 10 + d as V
+    b as V * 100 * (end - start - 3) as V + c as V * 10 + d as V
+}
+/// Reads raw bytes and masks the ;.
+fn parse_to_raw(data: &[u8], start: usize, end: usize) -> u32 {
+    let raw = u32::from_be_bytes(unsafe { *data.get_unchecked(start..).as_ptr().cast() });
+    raw >> (8 * (4 - (end - start)))
+}
+fn raw_to_value(v: u32) -> V {
+    let bytes = v.to_be_bytes();
+    // s = bc.d
+    let b = bytes[0] as V - b'0' as V;
+    let c = bytes[1] as V - b'0' as V;
+    let d = bytes[3] as V - b'0' as V;
+    b as V * 100 * (bytes[0] != 0) as V + c as V * 10 + d as V
 }
 
 fn format(v: V) -> String {
@@ -166,7 +180,10 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> Vec<Record> {
             let key = to_key(name);
             let index = phf.index_single_part(&key);
             let entry = slots.get_unchecked_mut(index);
-            entry.add(parse(data, sep, end));
+            entry.add(
+                parse_to_raw(data, sep + 1, end),
+                parse_lazy(data, sep + 1, end),
+            );
         }
     });
     slots
@@ -325,4 +342,21 @@ fn main() {
         "total: {}",
         format!("{:>5.2?}", start.elapsed()).bold().green()
     );
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn parse_raw() {
+        use super::*;
+        let d = b"12.3";
+        let raw = parse_to_raw(d, 0, 4);
+        let v = raw_to_value(raw);
+        assert_eq!(v, 123);
+
+        let d = b"12.3";
+        let raw = parse_to_raw(d, 1, 4);
+        let v = raw_to_value(raw);
+        assert_eq!(v, 23);
+    }
 }

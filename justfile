@@ -13,5 +13,5 @@ record:
 report:
     perf report
 
-test:
-    cargo test --quiet
+test *args:
+    cargo test --quiet -- {{args}}
