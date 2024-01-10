@@ -24,6 +24,7 @@ type PtrHash = ptr_hash::DefaultPtrHash<ptr_hash::hash::FxHash, u64>;
 #[repr(align(32))]
 struct Record {
     count: V,
+    /// We actually store the negative of the minimal value seen.
     min: V,
     max: V,
     sum: V,
@@ -33,19 +34,10 @@ impl Record {
     fn default() -> Self {
         Self {
             count: 0,
-            min: V::MIN,
-            max: V::MIN,
+            min: V::MIN / 2,
+            max: V::MIN / 2,
             sum: 0,
         }
-    }
-    fn min(&self) -> V {
-        -self.min
-    }
-    fn avg(&self) -> V {
-        self.sum / self.count
-    }
-    fn max(&self) -> V {
-        self.max
     }
     fn add(&mut self, value: V) {
         assert2::debug_assert!(value < 1000);
@@ -60,17 +52,23 @@ impl Record {
         self.min = self.min.max(other.min);
         self.max = self.max.max(other.max);
     }
-    fn merge_pos_neg(pos: &Record, neg: &Record) -> Record {
-        let count = pos.count + neg.count;
-        let sum = pos.sum - neg.sum;
-        let min = pos.min.max(neg.max);
-        let max = pos.max.max(neg.min);
-        Self {
-            count,
-            min,
-            max,
-            sum,
-        }
+    /// Return (min, avg, max)
+    fn merge_pos_neg(pos: &Record, neg: &Record) -> (V, V, V) {
+        const C: V = 11 * b'0' as V;
+        let pos_sum = pos.sum - pos.count * C;
+        let neg_sum = neg.sum - neg.count * C;
+        let sum = pos_sum - neg_sum;
+        let avg = sum / (pos.count + neg.count);
+
+        let pos_max = pos.max - C;
+        let neg_max = -(-neg.min - C);
+        let max = pos_max.max(neg_max);
+
+        let pos_min = -pos.min - C;
+        let neg_min = -(neg.max - C);
+        let min = pos_min.min(neg_min);
+
+        (min, avg, max)
     }
 }
 
@@ -78,8 +76,8 @@ fn parse(data: &[u8], sep: usize, end: usize) -> V {
     debug_assert!(data[sep + 1] != b'-');
     // s = bc.d
     let b = unsafe { *data.get_unchecked(end - 4) as V - b'0' as V };
-    let c = unsafe { *data.get_unchecked(end - 3) as V - b'0' as V };
-    let d = unsafe { *data.get_unchecked(end - 1) as V - b'0' as V };
+    let c = unsafe { *data.get_unchecked(end - 3) as V };
+    let d = unsafe { *data.get_unchecked(end - 1) as V };
     b as V * 100 * (end - sep >= 5) as V + c as V * 10 + d as V
 }
 
@@ -311,13 +309,13 @@ fn main() {
             let idxneg = phf.index_single_part(&kneg);
             let rpos = &records.get(idxpos).unwrap();
             let rneg = &records.get(idxneg).unwrap();
-            let r = Record::merge_pos_neg(rpos, rneg);
+            let (min, avg, max) = Record::merge_pos_neg(rpos, rneg);
             eprintln!(
                 "{}: {}/{}/{}",
                 to_str(namepos),
-                format(r.min()),
-                format(r.avg()),
-                format(r.max())
+                format(min),
+                format(avg),
+                format(max)
             );
         }
         eprintln!("done");
