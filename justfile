@@ -12,3 +12,6 @@ record:
     perf record cargo run -r
 report:
     perf report
+
+test:
+    cargo test --quiet

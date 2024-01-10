@@ -32,20 +32,39 @@ impl Record {
             sum: 0,
         }
     }
+    fn min(&self) -> V {
+        -self.min
+    }
+    fn avg(&self) -> V {
+        self.sum / self.count
+    }
+    fn max(&self) -> V {
+        self.max
+    }
     fn add(&mut self, value: V) {
+        assert2::debug_assert!(value < 1000);
         self.count += 1;
         self.sum += value;
         self.min = self.min.max(-value);
         self.max = self.max.max(value);
-    }
-    fn avg(&self) -> V {
-        self.sum / self.count as V
     }
     fn merge(&mut self, other: &Self) {
         self.count += other.count;
         self.sum += other.sum;
         self.min = self.min.max(other.min);
         self.max = self.max.max(other.max);
+    }
+    fn merge_pos_neg(pos: &Record, neg: &Record) -> Record {
+        let count = pos.count + neg.count;
+        let sum = pos.sum - neg.sum;
+        let min = pos.min.max(neg.max);
+        let max = pos.max.max(neg.min);
+        Self {
+            count,
+            min,
+            max,
+            sum,
+        }
     }
 }
 
@@ -185,7 +204,7 @@ fn to_str(name: &[u8]) -> &str {
 }
 
 #[inline(never)]
-fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
+fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
     let mut cities_map = FxHashMap::default();
 
     iter_lines(data, |name, _value| {
@@ -214,6 +233,10 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
     let mut cities = cities_map.into_iter().collect::<Vec<_>>();
     cities.sort_unstable_by_key(|&(_key, name)| name);
     let keys = cities.iter().map(|(k, _)| *k).collect::<Vec<_>>();
+    let names = cities
+        .iter()
+        .map(|(_, name)| name.to_vec())
+        .collect::<Vec<_>>();
 
     // eprintln!("cities {}", keys.len());
     // let min_len = cities.iter().map(|x| x.1.len()).min().unwrap();
@@ -230,7 +253,7 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<(u64, &[u8])>, PtrHash, usize) {
         ..PtrHashParams::default()
     };
     let ptrhash = PtrHash::new(&keys, params);
-    (cities, ptrhash, num_slots)
+    (names, ptrhash, num_slots)
 }
 
 #[derive(clap::Parser)]
@@ -259,7 +282,7 @@ fn main() {
     let data = &data[offset..];
 
     // Build a perfect hash function on the cities found in the first 100k characters.
-    let (cities, phf, num_slots) = build_perfect_hash(&data[..100000]);
+    let (names, phf, num_slots) = build_perfect_hash(&data[..100000]);
 
     let records = run_parallel(
         data,
@@ -270,16 +293,28 @@ fn main() {
     );
 
     if false {
-        for (key, name) in &cities {
-            let r = &records[phf.index_single_part(key)];
-            println!(
+        for name in &names {
+            if *name.last().unwrap() != b';' {
+                continue;
+            }
+            let namepos = &name[..name.len() - 1];
+            let kpos = to_key(namepos);
+            let kneg = to_key(name);
+
+            let idxpos = phf.index_single_part(&kpos);
+            let idxneg = phf.index_single_part(&kneg);
+            let rpos = &records.get(idxpos).unwrap();
+            let rneg = &records.get(idxneg).unwrap();
+            let r = Record::merge_pos_neg(rpos, rneg);
+            eprintln!(
                 "{}: {}/{}/{}",
-                to_str(name),
-                format(-r.min),
+                to_str(namepos),
+                format(r.min()),
                 format(r.avg()),
-                format(r.max)
+                format(r.max())
             );
         }
+        eprintln!("done");
     }
 
     eprintln!(
