@@ -73,14 +73,6 @@ impl Record {
     }
 }
 
-fn parse_lazy(data: &[u8], start: usize, end: usize) -> V {
-    debug_assert!(data[start] != b'-');
-    // s = bc.d
-    let b = unsafe { *data.get_unchecked(end - 4) as V - b'0' as V };
-    let c = unsafe { *data.get_unchecked(end - 3) as V };
-    let d = unsafe { *data.get_unchecked(end - 1) as V };
-    b as V * 100 * (end - start - 3) as V + c as V * 10 + d as V
-}
 /// Reads raw bytes and masks the ;.
 fn parse_to_raw(data: &[u8], start: usize, end: usize) -> u32 {
     let raw = u32::from_be_bytes(unsafe { *data.get_unchecked(start..).as_ptr().cast() });
@@ -93,6 +85,14 @@ fn raw_to_value(v: u32) -> V {
     let c = bytes[1] as V - b'0' as V;
     let d = bytes[3] as V - b'0' as V;
     b as V * 100 * (bytes[0] != 0) as V + c as V * 10 + d as V
+}
+fn parse_lazy(data: &[u8], start: usize, end: usize) -> V {
+    debug_assert!(data[start] != b'-');
+    // s = bc.d
+    let b = unsafe { *data.get_unchecked(end - 4) as V - b'0' as V };
+    let c = unsafe { *data.get_unchecked(end - 3) as V };
+    let d = unsafe { *data.get_unchecked(end - 1) as V };
+    b as V * 100 * (end - start - 3) as V + c as V * 10 + d as V
 }
 
 fn format(v: V) -> String {
