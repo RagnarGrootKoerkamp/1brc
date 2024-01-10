@@ -97,7 +97,9 @@ fn parse(data: &[u8], start: usize, end: usize) -> V {
     // Long multiplication.
     const C: u64 = 1 + (10 << 16) + (100 << 24);
     // Shift right by 24 and take the low 10 bits.
-    let v = ((raw as u64 * C) >> 24) & ((1 << 10) - 1);
+    let v = raw as u64 * C;
+    let v = (v >> 24) & ((1 << 10) - 1);
+    // let v = unsafe { core::arch::x86_64::_bextr_u64(v, 24, 10) };
     v as _
 }
 
