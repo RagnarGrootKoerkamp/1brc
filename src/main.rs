@@ -55,9 +55,8 @@ impl Record {
     }
     /// Return (min, avg, max)
     fn merge_pos_neg(pos: &Record, neg: &Record) -> (V, V, V) {
-        const C: V = 11 * b'0' as V;
-        let pos_sum = pos.sum - pos.count * C;
-        let neg_sum = neg.sum - neg.count * C;
+        let pos_sum = pos.sum;
+        let neg_sum = neg.sum;
         let sum = pos_sum - neg_sum;
         let avg = sum / (pos.count + neg.count);
 
@@ -86,13 +85,20 @@ fn raw_to_value(v: u32) -> V {
     let d = bytes[3] as V - b'0' as V;
     b as V * 100 * (bytes[0] != 0) as V + c as V * 10 + d as V
 }
-fn parse_lazy(data: &[u8], start: usize, end: usize) -> V {
-    debug_assert!(data[start] != b'-');
-    // s = bc.d
-    let b = unsafe { *data.get_unchecked(end - 4) as V - b'0' as V };
-    let c = unsafe { *data.get_unchecked(end - 3) as V };
-    let d = unsafe { *data.get_unchecked(end - 1) as V };
-    b as V * 100 * (end - start - 3) as V + c as V * 10 + d as V
+fn parse(data: &[u8], start: usize, end: usize) -> V {
+    // Start with a slice b"bc.d" of b"c.d"
+    // Read it as low-endian value 0xdd..ccbb or 0x??dd..cc (?? is what comes after d)
+    let raw = u32::from_le_bytes(unsafe { *data.get_unchecked(start..).as_ptr().cast() });
+    // Shift out the ??, so we now have 0xdd..ccbb or 0xdd..cc00.
+    let raw = raw >> (8 * (4 - (end - start)));
+    // Extract only the relevant bits corresponding to digits.
+    // Digits a looks of 0x3a in ASCII, so we simply mask out the high half of each byte.
+    let raw = raw & 0x0f000f0f;
+    // Long multiplication.
+    const C: u64 = 1 + (10 << 16) + (100 << 24);
+    // Shift right by 24 and take the low 10 bits.
+    let v = ((raw as u64 * C) >> 24) & ((1 << 10) - 1);
+    v as _
 }
 
 fn format(v: V) -> String {
@@ -180,10 +186,7 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> Vec<Record> {
             let key = to_key(name);
             let index = phf.index_single_part(&key);
             let entry = slots.get_unchecked_mut(index);
-            entry.add(
-                parse_to_raw(data, sep + 1, end),
-                parse_lazy(data, sep + 1, end),
-            );
+            entry.add(parse_to_raw(data, sep + 1, end), parse(data, sep + 1, end));
         }
     });
     slots
