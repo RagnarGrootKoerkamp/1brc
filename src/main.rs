@@ -1,4 +1,10 @@
-#![feature(slice_split_once, portable_simd, slice_as_chunks, split_array)]
+#![feature(
+    slice_split_once,
+    portable_simd,
+    slice_as_chunks,
+    split_array,
+    type_alias_impl_trait
+)]
 use clap::Parser;
 use colored::Colorize;
 use fxhash::FxHashMap;
@@ -68,13 +74,13 @@ impl Record {
     }
 }
 
-fn parse(s: &[u8]) -> V {
-    debug_assert!(s[0] != b'-');
+fn parse(data: &[u8], sep: usize, end: usize) -> V {
+    debug_assert!(data[sep + 1] != b'-');
     // s = bc.d
-    let b = unsafe { *s.get_unchecked(s.len().wrapping_sub(4)) as V - b'0' as V };
-    let c = unsafe { *s.get_unchecked(s.len().wrapping_sub(3)) as V - b'0' as V };
-    let d = unsafe { *s.get_unchecked(s.len().wrapping_sub(1)) as V - b'0' as V };
-    b as V * 100 * (s.len() >= 4) as V + c as V * 10 + d as V
+    let b = unsafe { *data.get_unchecked(end - 4) as V - b'0' as V };
+    let c = unsafe { *data.get_unchecked(end - 3) as V - b'0' as V };
+    let d = unsafe { *data.get_unchecked(end - 1) as V - b'0' as V };
+    b as V * 100 * (end - sep >= 5) as V + c as V * 10 + d as V
 }
 
 fn format(v: V) -> String {
@@ -105,7 +111,7 @@ type S = Simd<u8, L>;
 /// Find the regions between \n and ; (names) and between ; and \n (values),
 /// and calls `callback` for each line.
 #[inline(always)]
-fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8])) {
+fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, usize, usize)) {
     // Make sure that the out-of-bounds reads we do are OK.
     data = &data[..data.len() - 32];
 
@@ -139,11 +145,9 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8
         assert2::debug_assert!(state.start_pos < state.sep_pos);
         assert2::debug_assert!(state.sep_pos < end_pos);
 
-        unsafe {
-            let name = data.get_unchecked(state.start_pos..state.sep_pos - 1);
-            let value = data.get_unchecked(state.sep_pos..end_pos - 1);
-            callback(name, value);
-        }
+        // let name = data.get_unchecked(state.start_pos..state.sep_pos - 1);
+        // let value = data.get_unchecked(state.sep_pos..end_pos - 1);
+        callback(data, state.start_pos, state.sep_pos - 1, end_pos - 1);
 
         state.start_pos = end_pos;
     };
@@ -153,21 +157,19 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], &'a [u8
     }
 }
 
-fn run(data: &[u8], phf: &PtrHash, num_slots: usize) -> Vec<Record> {
+fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> Vec<Record> {
     // Each thread has its own accumulator.
     let mut slots = vec![Record::default(); num_slots];
-    iter_lines(data, |mut name, mut value| {
-        // If value is negative, extend name by one character.
+    iter_lines(data, |data, start, mut sep, end| {
         unsafe {
-            if value.get_unchecked(0) == &b'-' {
-                value = value.get_unchecked(1..);
-                name = name.get_unchecked(..name.len() + 1);
-            }
+            // If value is negative, extend name by one character.
+            sep += (data.get_unchecked(sep + 1) == &b'-') as usize;
+            let name = data.get_unchecked(start..sep);
+            let key = to_key(name);
+            let index = phf.index_single_part(&key);
+            let entry = slots.get_unchecked_mut(index);
+            entry.add(parse(data, sep, end));
         }
-        let key = to_key(name);
-        let index = phf.index_single_part(&key);
-        let entry = unsafe { slots.get_unchecked_mut(index) };
-        entry.add(parse(value));
     });
     slots
 }
@@ -207,7 +209,8 @@ fn to_str(name: &[u8]) -> &str {
 fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
     let mut cities_map = FxHashMap::default();
 
-    iter_lines(data, |name, _value| {
+    iter_lines(data, |data, start, sep, _end| {
+        let name = unsafe { data.get_unchecked(start..sep) };
         let key = to_key(name);
         let name_in_map = *cities_map.entry(key).or_insert(name);
         assert_eq!(
@@ -218,7 +221,7 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
             to_str(name_in_map)
         );
         // Do the same for the name with ; appended.
-        let name = unsafe { name.get_unchecked(..name.len() + 1) };
+        let name = unsafe { data.get_unchecked(start..sep + 1) };
         let key = to_key(name);
         let name_in_map = *cities_map.entry(key).or_insert(name);
         assert_eq!(
