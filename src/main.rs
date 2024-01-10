@@ -52,9 +52,9 @@ impl Record {
 fn parse(s: &[u8]) -> V {
     debug_assert!(s[0] != b'-');
     // s = bc.d
-    let b = unsafe { *s.get_unchecked(s.len().wrapping_sub(4)) - b'0' };
-    let c = unsafe { *s.get_unchecked(s.len().wrapping_sub(3)) - b'0' };
-    let d = unsafe { *s.get_unchecked(s.len().wrapping_sub(1)) - b'0' };
+    let b = unsafe { *s.get_unchecked(s.len().wrapping_sub(4)) as V - b'0' as V };
+    let c = unsafe { *s.get_unchecked(s.len().wrapping_sub(3)) as V - b'0' as V };
+    let d = unsafe { *s.get_unchecked(s.len().wrapping_sub(1)) as V - b'0' as V };
     b as V * 100 * (s.len() >= 4) as V + c as V * 10 + d as V
 }
 
