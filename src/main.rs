@@ -28,7 +28,7 @@ struct Record {
     min: u32,
     /// Byte representation of string b"bc.d" or b"\0c.d".
     max: u32,
-    sum: V,
+    sum: u64,
 }
 
 impl Record {
@@ -40,8 +40,8 @@ impl Record {
             sum: 0,
         }
     }
-    fn add(&mut self, raw_value: u32, value: V) {
-        assert2::debug_assert!(value < 1000);
+    fn add(&mut self, raw_value: u32, value: u64) {
+        // assert2::debug_assert!(value < 1000);
         self.count += 1;
         self.sum += value;
         self.min = self.min.max(!raw_value);
@@ -49,14 +49,18 @@ impl Record {
     }
     fn merge(&mut self, other: &Self) {
         self.count += other.count;
-        self.sum += other.sum;
+        self.sum += other.sum_to_val() as u64;
         self.min = self.min.max(other.min);
         self.max = self.max.max(other.max);
     }
+    fn sum_to_val(&self) -> V {
+        let m = (1 << 21) - 1;
+        ((self.sum & m) + 10 * ((self.sum >> 21) & m) + 100 * ((self.sum >> 42) & m)) as _
+    }
     /// Return (min, avg, max)
     fn merge_pos_neg(pos: &Record, neg: &Record) -> (V, V, V) {
-        let pos_sum = pos.sum;
-        let neg_sum = neg.sum;
+        let pos_sum = pos.sum as V;
+        let neg_sum = neg.sum as V;
         let sum = pos_sum - neg_sum;
         let avg = sum / (pos.count + neg.count);
 
@@ -85,22 +89,21 @@ fn raw_to_value(v: u32) -> V {
     let d = bytes[3] as V - b'0' as V;
     b as V * 100 * (bytes[0] != 0) as V + c as V * 10 + d as V
 }
-fn parse(data: &[u8], start: usize, end: usize) -> V {
+
+fn parse_pdep(data: &[u8], start: usize, end: usize) -> u64 {
     // Start with a slice b"bc.d" of b"c.d"
     // Read it as low-endian value 0xdd..ccbb or 0x??dd..cc (?? is what comes after d)
-    let raw = u32::from_le_bytes(unsafe { *data.get_unchecked(start..).as_ptr().cast() });
+    let raw = u32::from_be_bytes(unsafe { *data.get_unchecked(start..).as_ptr().cast() });
     // Shift out the ??, so we now have 0xdd..ccbb or 0xdd..cc00.
     let raw = raw >> (8 * (4 - (end - start)));
-    // Extract only the relevant bits corresponding to digits.
-    // Digits a looks of 0x3a in ASCII, so we simply mask out the high half of each byte.
-    let raw = raw & 0x0f000f0f;
-    // Long multiplication.
-    const C: u64 = 1 + (10 << 16) + (100 << 24);
-    // Shift right by 24 and take the low 10 bits.
-    let v = raw as u64 * C;
-    let v = (v >> 24) & ((1 << 10) - 1);
-    // let v = unsafe { core::arch::x86_64::_bextr_u64(v, 24, 10) };
-    v as _
+
+    //         0b                  bbbb             xxxxcccc     yyyyyyyyyyyydddd // Deposit here
+    //         0b                  1111                 1111                 1111 // Mask out trash using &
+    let pdep = 0b0000000000000000001111000000000000011111111000001111111111111111u64;
+    let mask = 0b0000000000000000001111000000000000000001111000000000000000001111u64;
+
+    let v = unsafe { core::arch::x86_64::_pdep_u64(raw as u64, pdep) };
+    v & mask
 }
 
 fn format(v: V) -> String {
@@ -188,7 +191,10 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> Vec<Record> {
             let key = to_key(name);
             let index = phf.index_single_part(&key);
             let entry = slots.get_unchecked_mut(index);
-            entry.add(parse_to_raw(data, sep + 1, end), parse(data, sep + 1, end));
+            entry.add(
+                parse_to_raw(data, sep + 1, end),
+                parse_pdep(data, sep + 1, end),
+            );
         }
     });
     slots
