@@ -265,6 +265,9 @@ struct Args {
 
     #[clap(short = 'j', long)]
     threads: Option<usize>,
+
+    #[clap(long)]
+    print: bool,
 }
 
 fn main() {
@@ -295,7 +298,7 @@ fn main() {
             .unwrap_or(available_parallelism().unwrap().into()),
     );
 
-    if false {
+    if args.print {
         for name in &names {
             if *name.last().unwrap() != b';' {
                 continue;
