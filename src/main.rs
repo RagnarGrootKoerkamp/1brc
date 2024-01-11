@@ -78,26 +78,13 @@ impl Record {
 }
 
 /// Reads raw bytes and masks the ;.
+/// Returns something of the form 0x3b3c..3d or 0x003c..3d
 fn parse_to_raw(data: &[u8], start: usize, end: usize) -> u32 {
     let raw = u32::from_be_bytes(unsafe { *data.get_unchecked(start..).as_ptr().cast() });
     raw >> (8 * (4 - (end - start)))
 }
-fn raw_to_value(v: u32) -> V {
-    let bytes = v.to_be_bytes();
-    // s = bc.d
-    let b = bytes[0] as V - b'0' as V;
-    let c = bytes[1] as V - b'0' as V;
-    let d = bytes[3] as V - b'0' as V;
-    b as V * 100 * (bytes[0] != 0) as V + c as V * 10 + d as V
-}
 
-fn parse_pdep(data: &[u8], start: usize, end: usize) -> u64 {
-    // Start with a slice b"bc.d" of b"c.d"
-    // Read it as low-endian value 0xdd..ccbb or 0x??dd..cc (?? is what comes after d)
-    let raw = u32::from_be_bytes(unsafe { *data.get_unchecked(start..).as_ptr().cast() });
-    // Shift out the ??, so we now have 0xdd..ccbb or 0xdd..cc00.
-    let raw = raw >> (8 * (4 - (end - start)));
-
+fn raw_to_pdep(raw: u32) -> u64 {
     //         0b                  bbbb             xxxxcccc     yyyyyyyyyyyydddd // Deposit here
     //         0b                  1111                 1111                 1111 // Mask out trash using &
     let pdep = 0b0000000000000000001111000000000000011111111000001111111111111111u64;
@@ -105,6 +92,15 @@ fn parse_pdep(data: &[u8], start: usize, end: usize) -> u64 {
 
     let v = unsafe { core::arch::x86_64::_pdep_u64(raw as u64, pdep) };
     v & mask
+}
+
+fn raw_to_value(v: u32) -> V {
+    let bytes = v.to_be_bytes();
+    // s = bc.d
+    let b = bytes[0] as V - b'0' as V;
+    let c = bytes[1] as V - b'0' as V;
+    let d = bytes[3] as V - b'0' as V;
+    b as V * 100 * (bytes[0] != 0) as V + c as V * 10 + d as V
 }
 
 fn format(v: V) -> String {
@@ -192,10 +188,9 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> Vec<Record> {
             let key = to_key(name);
             let index = phf.index_single_part(&key);
             let entry = slots.get_unchecked_mut(index);
-            entry.add(
-                parse_to_raw(data, sep + 1, end),
-                parse_pdep(data, sep + 1, end),
-            );
+            let raw = parse_to_raw(data, sep + 1, end);
+            // We use the raw for min/max purposes.
+            entry.add(raw, raw_to_pdep(raw));
         }
     });
     slots
@@ -347,7 +342,6 @@ fn main() {
                 format(max)
             );
         }
-        eprintln!("done");
     }
 
     eprintln!(
