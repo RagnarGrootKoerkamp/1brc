@@ -154,10 +154,10 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, 
         start_pos: usize,
     }
     let init_state = |idx: usize| {
-        let first_end = idx + data[idx..].iter().position(|&c| c == b'\n').unwrap();
+        let first_end = find(idx, end);
         State {
-            sep_pos: first_end,
-            start_pos: first_end,
+            sep_pos: first_end + 1,
+            start_pos: first_end + 1,
         }
     };
 
