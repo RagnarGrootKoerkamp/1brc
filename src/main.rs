@@ -62,7 +62,8 @@ impl Record {
         let pos_sum = pos.sum as V;
         let neg_sum = neg.sum as V;
         let sum = pos_sum - neg_sum;
-        let avg = sum / (pos.count + neg.count);
+        // round to nearest
+        let avg = (sum + (pos.count + neg.count) / 2) / (pos.count + neg.count);
 
         let pos_max = raw_to_value(pos.max);
         let neg_max = -raw_to_value(!neg.min);
