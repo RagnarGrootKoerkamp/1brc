@@ -77,29 +77,29 @@ impl Record {
     }
 }
 
-/// Reads raw bytes and masks the ;.
-/// Returns something of the form 0x3b3c..3d or 0x003c..3d
+/// Reads raw bytes and masks the ; and the b'0'=0x30.
+/// Returns something of the form 0x0b0c..0d or 0x000c..0d
 fn parse_to_raw(data: &[u8], start: usize, end: usize) -> u32 {
     let raw = u32::from_be_bytes(unsafe { *data.get_unchecked(start..).as_ptr().cast() });
-    raw >> (8 * (4 - (end - start)))
+    let raw = raw >> (8 * (4 - (end - start)));
+    let mask = 0x0f0f000f;
+    raw & mask
 }
 
 fn raw_to_pdep(raw: u32) -> u64 {
+    // input                                     0011bbbb0011cccc........0011dddd
     //         0b                  bbbb             xxxxcccc     yyyyyyyyyyyydddd // Deposit here
     //         0b                  1111                 1111                 1111 // Mask out trash using &
     let pdep = 0b0000000000000000001111000000000000011111111000001111111111111111u64;
-    let mask = 0b0000000000000000001111000000000000000001111000000000000000001111u64;
-
-    let v = unsafe { core::arch::x86_64::_pdep_u64(raw as u64, pdep) };
-    v & mask
+    unsafe { core::arch::x86_64::_pdep_u64(raw as u64, pdep) }
 }
 
 fn raw_to_value(v: u32) -> V {
     let bytes = v.to_be_bytes();
     // s = bc.d
-    let b = bytes[0] as V - b'0' as V;
-    let c = bytes[1] as V - b'0' as V;
-    let d = bytes[3] as V - b'0' as V;
+    let b = bytes[0] as V;
+    let c = bytes[1] as V;
+    let d = bytes[3] as V;
     b as V * 100 * (bytes[0] != 0) as V + c as V * 10 + d as V
 }
 
