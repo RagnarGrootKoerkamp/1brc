@@ -289,7 +289,7 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
     // let max_len = cities.iter().map(|x| x.1.len()).max().unwrap();
     // eprintln!("Min city len: {min_len}");
     // eprintln!("Max city len: {max_len}");
-    assert!(keys.len() <= 1000);
+    // assert!(keys.len() <= 1000);
 
     let num_slots = 2 * cities.len();
     let params = ptr_hash::PtrHashParams {
