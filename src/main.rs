@@ -358,7 +358,8 @@ fn main() {
     );
 
     if args.print {
-        let records_per_city = num_records / names.len();
+        // names contains 2 entries per city (pos and neg temps).
+        let records_per_city = num_records / (names.len() / 2);
 
         print!("{{");
         let mut first = true;
