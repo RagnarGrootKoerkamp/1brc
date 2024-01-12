@@ -74,12 +74,13 @@ impl Record {
         // round to nearest
         let avg = (sum + count / 2).div_floor(count);
 
-        let pos_max = raw_to_value(pos.max);
-        let neg_max = -raw_to_value(neg.min);
+        let mask = 0x0f0f000f;
+        let pos_max = raw_to_value(pos.max & mask);
+        let neg_max = -raw_to_value(neg.min & mask);
         let max = pos_max.max(neg_max);
 
-        let pos_min = raw_to_value(pos.min);
-        let neg_min = -raw_to_value(neg.max);
+        let pos_min = raw_to_value(pos.min & mask);
+        let neg_min = -raw_to_value(neg.max & mask);
         let min = pos_min.min(neg_min);
 
         (min, avg, max)
@@ -90,17 +91,25 @@ impl Record {
 /// Returns something of the form 0x0b0c..0d or 0x000c..0d
 fn parse_to_raw(data: &[u8], start: usize, end: usize) -> u32 {
     let raw = u32::from_be_bytes(unsafe { *data.get_unchecked(start..).as_ptr().cast() });
-    let raw = raw >> (8 * (4 - (end - start)));
-    let mask = 0x0f0f000f;
-    raw & mask
+    raw >> (8 * (4 - (end - start)))
 }
 
 fn raw_to_pdep(raw: u32) -> u64 {
-    // input                                     0011bbbb0011cccc........0011dddd
-    //         0b                  bbbb             xxxxcccc     yyyyyyyyyyyydddd // Deposit here
-    //         0b                  1111                 1111                 1111 // Mask out trash using &
-    let pdep = 0b0000000000000000001111000000000000011111111000001111111111111111u64;
-    unsafe { core::arch::x86_64::_pdep_u64(raw as u64, pdep) }
+    #[cfg(feature = "no_pdep")]
+    {
+        let raw = raw as u64;
+        (raw & 15) | ((raw & (15 << 16)) << (21 - 16)) | ((raw & (15 << 24)) << (42 - 24))
+    }
+    #[cfg(not(feature = "no_pdep"))]
+    {
+        let mask = 0x0f0f000f;
+        let raw = raw & mask;
+        // input                                     0011bbbb0011cccc........0011dddd
+        //         0b                  bbbb             xxxxcccc     yyyyyyyyyyyydddd // Deposit here
+        //         0b                  1111                 1111                 1111 // Mask out trash using &
+        let pdep = 0b0000000000000000001111000000000000011111111000001111111111111111u64;
+        unsafe { core::arch::x86_64::_pdep_u64(raw as u64, pdep) }
+    }
 }
 
 fn raw_to_value(v: u32) -> V {

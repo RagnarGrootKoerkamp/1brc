@@ -21,3 +21,6 @@ ptr_hash = { git = "https://github.com/ragnargrootkoerkamp/ptrhash", default_fea
 anyhow = "1.0.79"
 rand = "0.8.5"
 rand_distr = "0.4.3"
+
+[features]
+no_pdep = []
