@@ -228,26 +228,29 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> (Vec<Record>, 
                 // If value is negative, extend name by one character.
                 s0.sep += (data.get_unchecked(s0.sep + 1) == &b'-') as usize;
                 let name0 = data.get_unchecked(s0.start..s0.sep);
-                let key0 = to_key(name0);
-                let index0 = phf.index_single_part(&key0);
-                let raw0 = parse_to_raw(data, s0.sep + 1, s0.end);
 
                 s1.sep += (data.get_unchecked(s1.sep + 1) == &b'-') as usize;
                 let name1 = data.get_unchecked(s1.start..s1.sep);
-                let key1 = to_key(name1);
-                let index1 = phf.index_single_part(&key1);
-                let raw1 = parse_to_raw(data, s1.sep + 1, s1.end);
 
                 s2.sep += (data.get_unchecked(s2.sep + 1) == &b'-') as usize;
                 let name2 = data.get_unchecked(s2.start..s2.sep);
-                let key2 = to_key(name2);
-                let index2 = phf.index_single_part(&key2);
-                let raw2 = parse_to_raw(data, s2.sep + 1, s2.end);
 
                 s3.sep += (data.get_unchecked(s3.sep + 1) == &b'-') as usize;
                 let name3 = data.get_unchecked(s3.start..s3.sep);
+
+                let key0 = to_key(name0);
+                let key1 = to_key(name1);
+                let key2 = to_key(name2);
                 let key3 = to_key(name3);
+
+                let index0 = phf.index_single_part(&key0);
+                let index1 = phf.index_single_part(&key1);
+                let index2 = phf.index_single_part(&key2);
                 let index3 = phf.index_single_part(&key3);
+
+                let raw0 = parse_to_raw(data, s0.sep + 1, s0.end);
+                let raw1 = parse_to_raw(data, s1.sep + 1, s1.end);
+                let raw2 = parse_to_raw(data, s2.sep + 1, s2.end);
                 let raw3 = parse_to_raw(data, s3.sep + 1, s3.end);
 
                 let entry0 = slots.get_unchecked_mut(index0);
