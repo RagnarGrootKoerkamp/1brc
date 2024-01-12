@@ -146,10 +146,17 @@ const L: usize = 32;
 /// The Simd type.
 type S = Simd<u8, L>;
 
+#[derive(Copy, Clone)]
+struct State {
+    start: usize,
+    sep: usize,
+    end: usize,
+}
+
 /// Find the regions between \n and ; (names) and between ; and \n (values),
 /// and calls `callback` for each line.
 #[inline(always)]
-fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, usize, usize)) {
+fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], State)) {
     // Make sure that the out-of-bounds reads we do are OK.
     data = &data[..data.len() - 32];
 
@@ -177,17 +184,12 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, 
         last + offset
     };
 
-    struct State {
-        start_pos: usize,
-        sep_pos: usize,
-        end_pos: usize,
-    }
     let init_state = |idx: usize| {
         let first_end = find(idx, end);
         State {
-            start_pos: first_end + 1,
-            sep_pos: first_end + 1,
-            end_pos: 0,
+            start: first_end + 1,
+            sep: first_end + 1,
+            end: 0,
         }
     };
 
@@ -198,15 +200,15 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, 
 
     // Duplicate each line for each input state.
     macro_rules! step {
-        [$($e:expr),*] => {
-            $($e.sep_pos = find_long($e.sep_pos + 1, sep);)*
-                $($e.end_pos = find($e.sep_pos + 1, end) ;)*
-                $(callback(data, $e.start_pos, $e.sep_pos, $e.end_pos);)*
-                $($e.start_pos = $e.end_pos + 1;)*
+        [$($s:expr),*] => {
+            $($s.sep = find_long($s.sep + 1, sep) ;)*
+                $($s.end = find($s.sep + 1, end) ;)*
+                $(callback(data, $s);)*
+                $($s.start = $s.end + 1;)*
         }
     }
 
-    while state3.start_pos < data.len() {
+    while state3.start < data.len() {
         step!(state0, state1, state2, state3);
     }
 }
@@ -215,16 +217,16 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> (Vec<Record>, 
     // Each thread has its own accumulator.
     let mut slots = vec![Record::default(); num_slots];
     let mut num_records = 0;
-    iter_lines(data, |data, start, mut sep, end| {
+    iter_lines(data, |data, mut s: State| {
         num_records += 1;
         unsafe {
             // If value is negative, extend name by one character.
-            sep += (data.get_unchecked(sep + 1) == &b'-') as usize;
-            let name = data.get_unchecked(start..sep);
+            s.sep += (data.get_unchecked(s.sep + 1) == &b'-') as usize;
+            let name = data.get_unchecked(s.start..s.sep);
             let key = to_key(name);
             let index = phf.index_single_part(&key);
             let entry = slots.get_unchecked_mut(index);
-            let raw = parse_to_raw(data, sep + 1, end);
+            let raw = parse_to_raw(data, s.sep + 1, s.end);
             // We use the raw for min/max purposes.
             entry.add(raw, raw_to_pdep(raw));
         }
@@ -277,7 +279,8 @@ fn to_str(name: &[u8]) -> &str {
 fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
     let mut cities_map = FxHashMap::default();
 
-    iter_lines(data, |data, start, sep, _end| {
+    iter_lines(data, |data, state| {
+        let State { start, sep, .. } = state;
         let name = unsafe { data.get_unchecked(start..sep) };
         let key = to_key(name);
         let name_in_map = *cities_map.entry(key).or_insert(name);
