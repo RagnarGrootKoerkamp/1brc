@@ -230,32 +230,33 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> (Vec<Record>, 
                 let name0 = data.get_unchecked(s0.start..s0.sep);
                 let key0 = to_key(name0);
                 let index0 = phf.index_single_part(&key0);
-                let entry0 = slots.get_unchecked_mut(index0);
                 let raw0 = parse_to_raw(data, s0.sep + 1, s0.end);
-                entry0.add(raw0, raw_to_pdep(raw0));
 
                 s1.sep += (data.get_unchecked(s1.sep + 1) == &b'-') as usize;
                 let name1 = data.get_unchecked(s1.start..s1.sep);
                 let key1 = to_key(name1);
                 let index1 = phf.index_single_part(&key1);
-                let entry1 = slots.get_unchecked_mut(index1);
                 let raw1 = parse_to_raw(data, s1.sep + 1, s1.end);
-                entry1.add(raw1, raw_to_pdep(raw1));
 
                 s2.sep += (data.get_unchecked(s2.sep + 1) == &b'-') as usize;
                 let name2 = data.get_unchecked(s2.start..s2.sep);
                 let key2 = to_key(name2);
                 let index2 = phf.index_single_part(&key2);
-                let entry2 = slots.get_unchecked_mut(index2);
                 let raw2 = parse_to_raw(data, s2.sep + 1, s2.end);
-                entry2.add(raw2, raw_to_pdep(raw2));
 
                 s3.sep += (data.get_unchecked(s3.sep + 1) == &b'-') as usize;
                 let name3 = data.get_unchecked(s3.start..s3.sep);
                 let key3 = to_key(name3);
                 let index3 = phf.index_single_part(&key3);
-                let entry3 = slots.get_unchecked_mut(index3);
                 let raw3 = parse_to_raw(data, s3.sep + 1, s3.end);
+
+                let entry0 = slots.get_unchecked_mut(index0);
+                entry0.add(raw0, raw_to_pdep(raw0));
+                let entry1 = slots.get_unchecked_mut(index1);
+                entry1.add(raw1, raw_to_pdep(raw1));
+                let entry2 = slots.get_unchecked_mut(index2);
+                entry2.add(raw2, raw_to_pdep(raw2));
+                let entry3 = slots.get_unchecked_mut(index3);
                 entry3.add(raw3, raw_to_pdep(raw3));
             }
         },
