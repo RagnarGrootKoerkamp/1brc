@@ -199,10 +199,10 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, 
     // Duplicate each line for each input state.
     macro_rules! step {
         [$($e:expr),*] => {
-            $($e.sep_pos = find_long($e.sep_pos, sep) + 1;)*
-                $($e.end_pos = find($e.sep_pos, end) + 1;)*
-                $(callback(data, $e.start_pos, $e.sep_pos - 1, $e.end_pos - 1);)*
-                $($e.start_pos = $e.end_pos;)*
+            $($e.sep_pos = find_long($e.sep_pos + 1, sep);)*
+                $($e.end_pos = find($e.sep_pos + 1, end) ;)*
+                $(callback(data, $e.start_pos, $e.sep_pos, $e.end_pos);)*
+                $($e.start_pos = $e.end_pos + 1;)*
         }
     }
 
