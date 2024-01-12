@@ -8,6 +8,7 @@ I wrote a blog post explaining my ideas at https://curiouscoding.nl/posts/1brc .
 Note that I do make some assumptions:
 - Lines in the input are at most 33 characters, including the newline.
 - City names are uniquely determined by their first and last 8 characters.
+- Each input line contains a city drawn uniform random from the set of available cities.
 
 On my `i7-10750H CPU` running at `4.6GHz`, this results in:
 - 7.5s wall time on a single thread.
