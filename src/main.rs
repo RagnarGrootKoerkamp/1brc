@@ -156,7 +156,10 @@ struct State {
 /// Find the regions between \n and ; (names) and between ; and \n (values),
 /// and calls `callback` for each line.
 #[inline(always)]
-fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], State)) {
+fn iter_lines<'a>(
+    mut data: &'a [u8],
+    mut callback: impl FnMut(&'a [u8], State, State, State, State),
+) {
     // Make sure that the out-of-bounds reads we do are OK.
     data = &data[..data.len() - 32];
 
@@ -203,7 +206,7 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], State))
         [$($s:expr),*] => {
             $($s.sep = find_long($s.sep + 1, sep) ;)*
                 $($s.end = find($s.sep + 1, end) ;)*
-                $(callback(data, $s);)*
+                callback(data, $($s, )*);
                 $($s.start = $s.end + 1;)*
         }
     }
@@ -217,20 +220,46 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> (Vec<Record>, 
     // Each thread has its own accumulator.
     let mut slots = vec![Record::default(); num_slots];
     let mut num_records = 0;
-    iter_lines(data, |data, mut s: State| {
-        num_records += 1;
-        unsafe {
-            // If value is negative, extend name by one character.
-            s.sep += (data.get_unchecked(s.sep + 1) == &b'-') as usize;
-            let name = data.get_unchecked(s.start..s.sep);
-            let key = to_key(name);
-            let index = phf.index_single_part(&key);
-            let entry = slots.get_unchecked_mut(index);
-            let raw = parse_to_raw(data, s.sep + 1, s.end);
-            // We use the raw for min/max purposes.
-            entry.add(raw, raw_to_pdep(raw));
-        }
-    });
+    iter_lines(
+        data,
+        |data, mut s0: State, mut s1: State, mut s2: State, mut s3: State| {
+            num_records += 4;
+            unsafe {
+                // If value is negative, extend name by one character.
+                s0.sep += (data.get_unchecked(s0.sep + 1) == &b'-') as usize;
+                let name0 = data.get_unchecked(s0.start..s0.sep);
+                let key0 = to_key(name0);
+                let index0 = phf.index_single_part(&key0);
+                let entry0 = slots.get_unchecked_mut(index0);
+                let raw0 = parse_to_raw(data, s0.sep + 1, s0.end);
+                entry0.add(raw0, raw_to_pdep(raw0));
+
+                s1.sep += (data.get_unchecked(s1.sep + 1) == &b'-') as usize;
+                let name1 = data.get_unchecked(s1.start..s1.sep);
+                let key1 = to_key(name1);
+                let index1 = phf.index_single_part(&key1);
+                let entry1 = slots.get_unchecked_mut(index1);
+                let raw1 = parse_to_raw(data, s1.sep + 1, s1.end);
+                entry1.add(raw1, raw_to_pdep(raw1));
+
+                s2.sep += (data.get_unchecked(s2.sep + 1) == &b'-') as usize;
+                let name2 = data.get_unchecked(s2.start..s2.sep);
+                let key2 = to_key(name2);
+                let index2 = phf.index_single_part(&key2);
+                let entry2 = slots.get_unchecked_mut(index2);
+                let raw2 = parse_to_raw(data, s2.sep + 1, s2.end);
+                entry2.add(raw2, raw_to_pdep(raw2));
+
+                s3.sep += (data.get_unchecked(s3.sep + 1) == &b'-') as usize;
+                let name3 = data.get_unchecked(s3.start..s3.sep);
+                let key3 = to_key(name3);
+                let index3 = phf.index_single_part(&key3);
+                let entry3 = slots.get_unchecked_mut(index3);
+                let raw3 = parse_to_raw(data, s3.sep + 1, s3.end);
+                entry3.add(raw3, raw_to_pdep(raw3));
+            }
+        },
+    );
     (slots, num_records)
 }
 
@@ -279,7 +308,7 @@ fn to_str(name: &[u8]) -> &str {
 fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
     let mut cities_map = FxHashMap::default();
 
-    iter_lines(data, |data, state| {
+    let mut callback = |data: &[u8], state: State| {
         let State { start, sep, .. } = state;
         let name = unsafe { data.get_unchecked(start..sep) };
         let key = to_key(name);
@@ -302,6 +331,9 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
             to_str(name),
             to_str(name_in_map),
         );
+    };
+    iter_lines(data, |d, s0, s1, s2, s3| {
+        flatten_callback(d, s0, s1, s2, s3, &mut callback)
     });
 
     let mut cities = cities_map.into_iter().collect::<Vec<_>>();
@@ -328,6 +360,20 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
     };
     let ptrhash = PtrHash::new(&keys, params);
     (names, ptrhash, num_slots)
+}
+
+fn flatten_callback<'a>(
+    data: &'a [u8],
+    s0: State,
+    s1: State,
+    s2: State,
+    s3: State,
+    callback: &mut impl FnMut(&'a [u8], State),
+) {
+    callback(data, s0);
+    callback(data, s1);
+    callback(data, s2);
+    callback(data, s3);
 }
 
 #[derive(clap::Parser)]
