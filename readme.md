@@ -11,8 +11,8 @@ Note that I do make some assumptions:
 - Each input line contains a city drawn uniform random from the set of available cities.
 
 On my `i7-10750H CPU` running at `4.6GHz`, this results in:
-- 7.5s wall time on a single thread.
-- 1.43s wall time on 6 threads.
+- 5.72s wall time on a single thread.
+- 1.01s wall time on 12 threads on 6 cores.
 
 
 ## While you're here
