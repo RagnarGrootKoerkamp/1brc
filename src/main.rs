@@ -24,7 +24,7 @@ type PtrHash = ptr_hash::DefaultPtrHash<ptr_hash::hash::FxHash, u64>;
 #[derive(Clone)]
 #[repr(align(32))]
 struct Record {
-    // count: V,
+    count: u64,
     // Storing these as two u32 is nice, because they are read as a single u64.
     /// Byte representation of string ~b"bc.d" or ~b"\0c.d".
     min: u32,
@@ -36,7 +36,7 @@ struct Record {
 impl Record {
     fn default() -> Self {
         Self {
-            // count: 0,
+            count: 0,
             min: 0,
             max: 0,
             sum: 0,
@@ -44,7 +44,7 @@ impl Record {
     }
     fn add(&mut self, raw_value: u32, value: u64) {
         // assert2::debug_assert!(value < 1000);
-        // self.count += 1;
+        self.count += 1;
         self.sum += value;
         // See https://en.algorithmica.org/hpc/algorithms/argmin/
         if raw_value < self.min {
@@ -55,7 +55,7 @@ impl Record {
         }
     }
     fn merge(&mut self, other: &Self) {
-        // self.count += other.count;
+        self.count += other.count;
         self.sum += other.sum_to_val() as u64;
         self.min = self.min.min(other.min);
         self.max = self.max.max(other.max);
@@ -65,12 +65,12 @@ impl Record {
         ((self.sum & m) + 10 * ((self.sum >> 21) & m) + 100 * ((self.sum >> 42) & m)) as _
     }
     /// Return (min, avg, max)
-    fn merge_pos_neg(pos: &Record, neg: &Record, avg_count: usize) -> (V, V, V) {
+    fn merge_pos_neg(pos: &Record, neg: &Record) -> (V, V, V) {
         let pos_sum = pos.sum as V;
         let neg_sum = neg.sum as V;
         let sum = pos_sum - neg_sum;
-        // let count = pos.count + neg.count;
-        let count = avg_count as V;
+        let count = (pos.count + neg.count) as V;
+        // let count = avg_count as V;
         // round to nearest
         let avg = (sum + count / 2).div_floor(count);
 
@@ -216,14 +216,12 @@ fn iter_lines<'a>(
     }
 }
 
-fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> (Vec<Record>, usize) {
+fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> Vec<Record> {
     // Each thread has its own accumulator.
     let mut slots = vec![Record::default(); num_slots];
-    let mut num_records = 0;
     iter_lines(
         data,
         |data, mut s0: State, mut s1: State, mut s2: State, mut s3: State| {
-            num_records += 4;
             unsafe {
                 // If value is negative, extend name by one character.
                 s0.sep += (data.get_unchecked(s0.sep + 1) == &b'-') as usize;
@@ -264,21 +262,15 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> (Vec<Record>, 
             }
         },
     );
-    (slots, num_records)
+    slots
 }
 
-fn run_parallel(
-    data: &[u8],
-    phf: &PtrHash,
-    num_slots: usize,
-    num_threads: usize,
-) -> (Vec<Record>, usize) {
+fn run_parallel(data: &[u8], phf: &PtrHash, num_slots: usize, num_threads: usize) -> Vec<Record> {
     if num_threads == 0 {
         return run(data, phf, num_slots);
     }
 
     let slots = std::sync::Mutex::new(vec![Record::default(); num_slots]);
-    let num_records = std::sync::Mutex::new(0);
 
     // Spawn one thread per core.
     std::thread::scope(|s| {
@@ -286,10 +278,9 @@ fn run_parallel(
         for chunk in chunks {
             s.spawn(|| {
                 // Each thread has its own accumulator.
-                let (thread_slots, thread_num_records) = run(chunk, phf, num_slots);
+                let thread_slots = run(chunk, phf, num_slots);
 
                 // Merge results.
-                *num_records.lock().unwrap() += thread_num_records;
                 let mut slots = slots.lock().unwrap();
                 for (thread_slot, slot) in thread_slots.into_iter().zip(slots.iter_mut()) {
                     slot.merge(&thread_slot);
@@ -298,10 +289,7 @@ fn run_parallel(
         }
     });
 
-    (
-        slots.into_inner().unwrap(),
-        num_records.into_inner().unwrap(),
-    )
+    slots.into_inner().unwrap()
 }
 
 fn to_str(name: &[u8]) -> &str {
@@ -411,7 +399,7 @@ fn main() {
     // Build a perfect hash function on the cities found in the first 100k characters.
     let (names, phf, num_slots) = build_perfect_hash(&data[..100000]);
 
-    let (records, num_records) = run_parallel(
+    let records = run_parallel(
         data,
         &phf,
         num_slots,
@@ -420,9 +408,6 @@ fn main() {
     );
 
     if args.print {
-        // names contains 2 entries per city (pos and neg temps).
-        let records_per_city = num_records / (names.len() / 2);
-
         print!("{{");
         let mut first = true;
         for name in &names {
@@ -437,7 +422,7 @@ fn main() {
             let idxneg = phf.index_single_part(&kneg);
             let rpos = &records.get(idxpos).unwrap();
             let rneg = &records.get(idxneg).unwrap();
-            let (min, avg, max) = Record::merge_pos_neg(rpos, rneg, records_per_city);
+            let (min, avg, max) = Record::merge_pos_neg(rpos, rneg);
 
             if !first {
                 print!(", ");
