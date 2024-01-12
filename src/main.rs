@@ -3,7 +3,8 @@
     portable_simd,
     slice_as_chunks,
     split_array,
-    type_alias_impl_trait
+    type_alias_impl_trait,
+    int_roundings
 )]
 use clap::Parser;
 use colored::Colorize;
@@ -68,7 +69,7 @@ impl Record {
         let neg_sum = neg.sum as V;
         let sum = pos_sum - neg_sum;
         // round to nearest
-        let avg = (sum + (pos.count + neg.count) / 2) / (pos.count + neg.count);
+        let avg = (sum + (pos.count + neg.count) / 2).div_floor(pos.count + neg.count);
 
         let pos_max = raw_to_value(pos.max);
         let neg_max = -raw_to_value(neg.min);
@@ -326,6 +327,8 @@ fn main() {
     );
 
     if args.print {
+        print!("{{");
+        let mut first = true;
         for name in &names {
             if *name.last().unwrap() != b';' {
                 continue;
@@ -339,14 +342,21 @@ fn main() {
             let rpos = &records.get(idxpos).unwrap();
             let rneg = &records.get(idxneg).unwrap();
             let (min, avg, max) = Record::merge_pos_neg(rpos, rneg);
-            eprintln!(
-                "{}: {}/{}/{}",
+
+            if !first {
+                print!(", ");
+            }
+            first = false;
+
+            print!(
+                "{}={}/{}/{}",
                 to_str(namepos),
                 format(min),
                 format(avg),
                 format(max)
             );
         }
+        println!("}}");
     }
 
     eprintln!(

@@ -15,3 +15,6 @@ report:
 
 test *args:
     cargo test --quiet -- {{args}}
+
+verify:
+    cargo run -r --quiet -- --print > results.txt && diff result.txt result_ref.txt
