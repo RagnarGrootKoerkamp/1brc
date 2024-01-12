@@ -1,5 +1,7 @@
 run *args:
     cargo run -r --quiet -- {{args}}
+time *args:
+    cargo build -r --quiet && time ./target/release/one-billion-row-challenge {{args}}
 small:
     cargo run --quiet -- measurements-small.txt
 flame:
