@@ -169,14 +169,16 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, 
     };
 
     struct State {
-        sep_pos: usize,
         start_pos: usize,
+        sep_pos: usize,
+        end_pos: usize,
     }
     let init_state = |idx: usize| {
         let first_end = find(idx, end);
         State {
-            sep_pos: first_end + 1,
             start_pos: first_end + 1,
+            sep_pos: first_end + 1,
+            end_pos: 0,
         }
     };
 
@@ -184,15 +186,9 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, 
 
     let mut step = |state: &mut State| {
         state.sep_pos = find_long(state.sep_pos, sep) + 1;
-        let end_pos = find(state.sep_pos, end) + 1;
-        assert2::debug_assert!(state.start_pos < state.sep_pos);
-        assert2::debug_assert!(state.sep_pos < end_pos);
-
-        // let name = data.get_unchecked(state.start_pos..state.sep_pos - 1);
-        // let value = data.get_unchecked(state.sep_pos..end_pos - 1);
-        callback(data, state.start_pos, state.sep_pos - 1, end_pos - 1);
-
-        state.start_pos = end_pos;
+        state.end_pos = find(state.sep_pos, end) + 1;
+        callback(data, state.start_pos, state.sep_pos - 1, state.end_pos - 1);
+        state.start_pos = state.end_pos;
     };
 
     while state.start_pos < data.len() {
