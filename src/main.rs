@@ -182,17 +182,23 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, 
         }
     };
 
-    let mut state = init_state(0);
+    let mut state0 = init_state(0);
+    let mut state1 = init_state(data.len() / 4);
+    let mut state2 = init_state(2 * data.len() / 4);
+    let mut state3 = init_state(3 * data.len() / 4);
 
-    let mut step = |state: &mut State| {
-        state.sep_pos = find_long(state.sep_pos, sep) + 1;
-        state.end_pos = find(state.sep_pos, end) + 1;
-        callback(data, state.start_pos, state.sep_pos - 1, state.end_pos - 1);
-        state.start_pos = state.end_pos;
-    };
+    // Duplicate each line for each input state.
+    macro_rules! step {
+        [$($e:expr),*] => {
+            $($e.sep_pos = find_long($e.sep_pos, sep) + 1;)*
+                $($e.end_pos = find($e.sep_pos, end) + 1;)*
+                $(callback(data, $e.start_pos, $e.sep_pos - 1, $e.end_pos - 1);)*
+                $($e.start_pos = $e.end_pos;)*
+        }
+    }
 
-    while state.start_pos < data.len() {
-        step(&mut state);
+    while state3.start_pos < data.len() {
+        step!(state0, state1, state2, state3);
     }
 }
 
