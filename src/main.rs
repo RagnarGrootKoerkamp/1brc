@@ -44,13 +44,18 @@ impl Record {
         // assert2::debug_assert!(value < 1000);
         self.count += 1;
         self.sum += value;
-        self.min = self.min.max(!raw_value);
-        self.max = self.max.max(raw_value);
+        // See https://en.algorithmica.org/hpc/algorithms/argmin/
+        if raw_value < self.min {
+            self.min = raw_value;
+        }
+        if raw_value > self.max {
+            self.max = raw_value;
+        }
     }
     fn merge(&mut self, other: &Self) {
         self.count += other.count;
         self.sum += other.sum_to_val() as u64;
-        self.min = self.min.max(other.min);
+        self.min = self.min.min(other.min);
         self.max = self.max.max(other.max);
     }
     fn sum_to_val(&self) -> V {
@@ -66,10 +71,10 @@ impl Record {
         let avg = (sum + (pos.count + neg.count) / 2) / (pos.count + neg.count);
 
         let pos_max = raw_to_value(pos.max);
-        let neg_max = -raw_to_value(!neg.min);
+        let neg_max = -raw_to_value(neg.min);
         let max = pos_max.max(neg_max);
 
-        let pos_min = raw_to_value(!pos.min);
+        let pos_min = raw_to_value(pos.min);
         let neg_min = -raw_to_value(neg.max);
         let min = pos_min.min(neg_min);
 
