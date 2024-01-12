@@ -153,6 +153,20 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, 
         let offset = eq.trailing_zeros() as usize;
         last + offset
     };
+    // Modified to be able to search regions longer than 32.
+    let find_long = |mut last: usize, sep: S| {
+        let simd = S::from_array(unsafe { *data.get_unchecked(last..).as_ptr().cast() });
+        let mut eq = sep.simd_eq(simd).to_bitmask() as u32;
+        if eq == 0 {
+            while eq == 0 {
+                last += 32;
+                let simd = S::from_array(unsafe { *data.get_unchecked(last..).as_ptr().cast() });
+                eq = sep.simd_eq(simd).to_bitmask() as u32;
+            }
+        }
+        let offset = eq.trailing_zeros() as usize;
+        last + offset
+    };
 
     struct State {
         sep_pos: usize,
@@ -169,7 +183,7 @@ fn iter_lines<'a>(mut data: &'a [u8], mut callback: impl FnMut(&'a [u8], usize, 
     let mut state = init_state(0);
 
     let mut step = |state: &mut State| {
-        state.sep_pos = find(state.sep_pos, sep) + 1;
+        state.sep_pos = find_long(state.sep_pos, sep) + 1;
         let end_pos = find(state.sep_pos, end) + 1;
         assert2::debug_assert!(state.start_pos < state.sep_pos);
         assert2::debug_assert!(state.sep_pos < end_pos);
