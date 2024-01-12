@@ -283,29 +283,29 @@ fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
         let State { start, sep, .. } = state;
         let name = unsafe { data.get_unchecked(start..sep) };
         let key = to_key(name);
-        let name_in_map = *cities_map.entry(key).or_insert(name);
+        let name_in_map = cities_map.entry(key).or_insert_with(|| name.to_vec());
         assert_eq!(
             name,
             name_in_map,
             "existing = {}  != {} = inserting",
             to_str(name),
-            to_str(name_in_map)
+            to_str(name_in_map),
         );
         // Do the same for the name with ; appended.
         let name = unsafe { data.get_unchecked(start..sep + 1) };
         let key = to_key(name);
-        let name_in_map = *cities_map.entry(key).or_insert(name);
+        let name_in_map = cities_map.entry(key).or_insert_with(|| name.to_vec());
         assert_eq!(
             name,
             name_in_map,
             "existing = {}  != {} = inserting",
             to_str(name),
-            to_str(name_in_map)
+            to_str(name_in_map),
         );
     });
 
     let mut cities = cities_map.into_iter().collect::<Vec<_>>();
-    cities.sort_unstable_by_key(|&(_key, name)| name);
+    cities.sort_unstable_by(|(_, l), (_, r)| l.cmp(r));
     let keys = cities.iter().map(|(k, _)| *k).collect::<Vec<_>>();
     let names = cities
         .iter()
