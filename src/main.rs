@@ -25,6 +25,7 @@ type PtrHash = ptr_hash::DefaultPtrHash<ptr_hash::hash::FxHash, u64>;
 #[repr(align(32))]
 struct Record {
     count: V,
+    // Storing these as two u32 is nice, because they are read as a single u64.
     /// Byte representation of string ~b"bc.d" or ~b"\0c.d".
     min: u32,
     /// Byte representation of string b"bc.d" or b"\0c.d".
