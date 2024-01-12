@@ -18,3 +18,8 @@ test *args:
 
 verify:
     cargo run -r --quiet -- --print > results.txt && diff result.txt result_ref.txt
+
+cpu-slow:
+    sudo cpupower frequency-set --governor performance -d 0.6GHz -u 3.6GHz > /dev/null
+cpu-fast:
+    sudo cpupower frequency-set --governor performance -d 0.6GHz -u 4.6GHz > /dev/null
