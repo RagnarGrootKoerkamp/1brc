@@ -8,7 +8,7 @@
 )]
 use clap::Parser;
 use colored::Colorize;
-use fxhash::FxHashMap;
+use fxhash::FxHashSet;
 use memmap2::Mmap;
 use ptr_hash::PtrHashParams;
 use std::{
@@ -20,6 +20,106 @@ use std::{
 type V = i32;
 
 type PtrHash = ptr_hash::DefaultPtrHash<ptr_hash::hash::FxHash, u64>;
+
+struct Phf {
+    ptr_hash: PtrHash,
+    keys: Vec<Vec<u8>>,
+    slots: Vec<Record>,
+}
+
+impl Phf {
+    fn new(mut keys: Vec<Vec<u8>>) -> Self {
+        keys.sort();
+
+        let num_slots = 2 * keys.len();
+        let params = ptr_hash::PtrHashParams {
+            alpha: 0.9,
+            c: 1.5,
+            slots_per_part: num_slots,
+            ..PtrHashParams::default()
+        };
+
+        let hashes: Vec<u64> = keys.iter().map(|key| hash_name(key)).collect();
+        let ptr_hash = PtrHash::new(&hashes, params);
+
+        let slots = vec![Record::default(); num_slots];
+        // for key in &keys {
+        // let hash = hash_name(&key);
+        // assert!(hash != 0);
+        // let idx = ptr_hash.index_single_part(&hash);
+        // let record = &mut slots[idx];
+        // assert_eq!(record.hash, 0);
+        // record.hash = hash;
+        // }
+
+        Self {
+            ptr_hash,
+            keys,
+            slots,
+        }
+    }
+    fn compute_index(&self, hash: u64) -> usize {
+        self.ptr_hash.index_single_part(&hash)
+    }
+    fn get_index_mut(&mut self, idx: usize) -> &mut Record {
+        &mut self.slots[idx]
+    }
+    fn index_hash_mut(&mut self, hash: u64) -> &mut Record {
+        &mut self.slots[self.ptr_hash.index_single_part(&hash)]
+    }
+    fn index<'b>(&'b self, key: &[u8]) -> &'b Record {
+        let hash = hash_name(key);
+        &self.slots[self.compute_index(hash)]
+    }
+    fn index_mut<'b>(&'b mut self, key: &[u8]) -> &'b mut Record {
+        self.index_hash_mut(hash_name(key))
+    }
+    fn merge(&mut self, r: Self) {
+        if self.keys == r.keys {
+            for (slot, r_slot) in self.slots.iter_mut().zip(&r.slots) {
+                slot.merge(r_slot);
+            }
+            return;
+        }
+        // TODO: If one is a subset of the other, merge smaller into larger.
+
+        let mut new_keys = vec![];
+        let mut i1 = 0;
+        let mut i2 = 0;
+        while i1 < self.keys.len() && i2 < r.keys.len() {
+            if self.keys[i1] == r.keys[i2] {
+                new_keys.push(self.keys[i1].clone());
+                i1 += 1;
+                i2 += 1;
+                continue;
+            }
+            if self.keys[i1] < r.keys[i2] {
+                new_keys.push(self.keys[i1].clone());
+                i1 += 1;
+                continue;
+            }
+            if self.keys[i1] > r.keys[i2] {
+                new_keys.push(r.keys[i2].clone());
+                i2 += 1;
+                continue;
+            }
+        }
+        while i1 < self.keys.len() {
+            new_keys.push(self.keys[i1].clone());
+        }
+        while i2 < r.keys.len() {
+            new_keys.push(r.keys[i2].clone());
+        }
+        let mut new_phf = Self::new(new_keys);
+        for key in &self.keys {
+            new_phf.index_mut(key).merge(self.index(key));
+        }
+        for key in &r.keys {
+            new_phf.index_mut(key).merge(r.index(key));
+        }
+        *self = new_phf;
+    }
+}
 
 #[derive(Clone)]
 #[repr(align(32))]
@@ -126,8 +226,9 @@ fn format(v: V) -> String {
 }
 
 #[allow(unused)]
-fn to_key(name: &[u8]) -> u64 {
+fn hash_name(name: &[u8]) -> u64 {
     // Hash the first and last 8 bytes.
+    // TODO: More robust hash that actually uses all characters.
     let head: [u8; 8] = unsafe { *name.get_unchecked(..8).split_array_ref().0 };
     let tail: [u8; 8] = unsafe {
         *name
@@ -216,9 +317,9 @@ fn iter_lines<'a>(
     }
 }
 
-fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> Vec<Record> {
+fn run(data: &[u8], keys: &[Vec<u8>]) -> Phf {
     // Each thread has its own accumulator.
-    let mut slots = vec![Record::default(); num_slots];
+    let mut h = Phf::new(keys.to_vec());
     iter_lines(
         data,
         |data, mut s0: State, mut s1: State, mut s2: State, mut s3: State| {
@@ -236,41 +337,37 @@ fn run<'a>(data: &'a [u8], phf: &'a PtrHash, num_slots: usize) -> Vec<Record> {
                 s3.sep += (data.get_unchecked(s3.sep + 1) == &b'-') as usize;
                 let name3 = data.get_unchecked(s3.start..s3.sep);
 
-                let key0 = to_key(name0);
-                let key1 = to_key(name1);
-                let key2 = to_key(name2);
-                let key3 = to_key(name3);
-
-                let index0 = phf.index_single_part(&key0);
-                let index1 = phf.index_single_part(&key1);
-                let index2 = phf.index_single_part(&key2);
-                let index3 = phf.index_single_part(&key3);
-
                 let raw0 = parse_to_raw(data, s0.sep + 1, s0.end);
                 let raw1 = parse_to_raw(data, s1.sep + 1, s1.end);
                 let raw2 = parse_to_raw(data, s2.sep + 1, s2.end);
                 let raw3 = parse_to_raw(data, s3.sep + 1, s3.end);
 
-                let entry0 = slots.get_unchecked_mut(index0);
-                entry0.add(raw0, raw_to_pdep(raw0));
-                let entry1 = slots.get_unchecked_mut(index1);
-                entry1.add(raw1, raw_to_pdep(raw1));
-                let entry2 = slots.get_unchecked_mut(index2);
-                entry2.add(raw2, raw_to_pdep(raw2));
-                let entry3 = slots.get_unchecked_mut(index3);
-                entry3.add(raw3, raw_to_pdep(raw3));
+                let h0 = hash_name(name0);
+                let h1 = hash_name(name1);
+                let h2 = hash_name(name2);
+                let h3 = hash_name(name3);
+
+                let idx0 = h.compute_index(h0);
+                let idx1 = h.compute_index(h1);
+                let idx2 = h.compute_index(h2);
+                let idx3 = h.compute_index(h3);
+
+                h.get_index_mut(idx0).add(raw0, raw_to_pdep(raw0));
+                h.get_index_mut(idx1).add(raw1, raw_to_pdep(raw1));
+                h.get_index_mut(idx2).add(raw2, raw_to_pdep(raw2));
+                h.get_index_mut(idx3).add(raw3, raw_to_pdep(raw3));
             }
         },
     );
-    slots
+    h
 }
 
-fn run_parallel(data: &[u8], phf: &PtrHash, num_slots: usize, num_threads: usize) -> Vec<Record> {
+fn run_parallel(data: &[u8], keys: &[Vec<u8>], num_threads: usize) -> Phf {
     if num_threads == 0 {
-        return run(data, phf, num_slots);
+        return run(data, keys);
     }
 
-    let slots = std::sync::Mutex::new(vec![Record::default(); num_slots]);
+    let phf = std::sync::Mutex::new(Phf::new(keys.to_vec()));
 
     // Spawn one thread per core.
     std::thread::scope(|s| {
@@ -278,80 +375,44 @@ fn run_parallel(data: &[u8], phf: &PtrHash, num_slots: usize, num_threads: usize
         for chunk in chunks {
             s.spawn(|| {
                 // Each thread has its own accumulator.
-                let thread_slots = run(chunk, phf, num_slots);
+                let thread_phf = run(chunk, keys);
 
                 // Merge results.
-                let mut slots = slots.lock().unwrap();
-                for (thread_slot, slot) in thread_slots.into_iter().zip(slots.iter_mut()) {
-                    slot.merge(&thread_slot);
-                }
+                phf.lock().unwrap().merge(thread_phf);
             });
         }
     });
 
-    slots.into_inner().unwrap()
+    phf.into_inner().unwrap()
 }
 
 fn to_str(name: &[u8]) -> &str {
     std::str::from_utf8(name).unwrap()
 }
 
+/// Returns a list of city names found in data.
+/// Each city is returned twice, once as `<city>` and once as `<city>;`,
+/// with the latter being used to accumulate negative temperatures.
 #[inline(never)]
-fn build_perfect_hash(data: &[u8]) -> (Vec<Vec<u8>>, PtrHash, usize) {
-    let mut cities_map = FxHashMap::default();
+fn find_city_names(data: &[u8]) -> Vec<Vec<u8>> {
+    let mut cities = FxHashSet::default();
 
     let mut callback = |data: &[u8], state: State| {
         let State { start, sep, .. } = state;
         let name = unsafe { data.get_unchecked(start..sep) };
-        let key = to_key(name);
-        let name_in_map = cities_map.entry(key).or_insert_with(|| name.to_vec());
-        assert_eq!(
-            name,
-            name_in_map,
-            "existing = {}  != {} = inserting",
-            to_str(name),
-            to_str(name_in_map),
-        );
+        cities.insert(name.to_vec());
+
         // Do the same for the name with ; appended.
         let name = unsafe { data.get_unchecked(start..sep + 1) };
-        let key = to_key(name);
-        let name_in_map = cities_map.entry(key).or_insert_with(|| name.to_vec());
-        assert_eq!(
-            name,
-            name_in_map,
-            "existing = {}  != {} = inserting",
-            to_str(name),
-            to_str(name_in_map),
-        );
+        cities.insert(name.to_vec());
     };
     iter_lines(data, |d, s0, s1, s2, s3| {
         flatten_callback(d, s0, s1, s2, s3, &mut callback)
     });
 
-    let mut cities = cities_map.into_iter().collect::<Vec<_>>();
-    cities.sort_unstable_by(|(_, l), (_, r)| l.cmp(r));
-    let keys = cities.iter().map(|(k, _)| *k).collect::<Vec<_>>();
-    let names = cities
-        .iter()
-        .map(|(_, name)| name.to_vec())
-        .collect::<Vec<_>>();
-
-    // eprintln!("cities {}", keys.len());
-    // let min_len = cities.iter().map(|x| x.1.len()).min().unwrap();
-    // let max_len = cities.iter().map(|x| x.1.len()).max().unwrap();
-    // eprintln!("Min city len: {min_len}");
-    // eprintln!("Max city len: {max_len}");
-    // assert!(keys.len() <= 1000);
-
-    let num_slots = 2 * cities.len();
-    let params = ptr_hash::PtrHashParams {
-        alpha: 0.9,
-        c: 1.5,
-        slots_per_part: num_slots,
-        ..PtrHashParams::default()
-    };
-    let ptrhash = PtrHash::new(&keys, params);
-    (names, ptrhash, num_slots)
+    let mut cities: Vec<_> = cities.into_iter().collect();
+    cities.sort();
+    cities
 }
 
 fn flatten_callback<'a>(
@@ -397,12 +458,11 @@ fn main() {
     let data = &data[offset..];
 
     // Build a perfect hash function on the cities found in the first 100k characters.
-    let (names, phf, num_slots) = build_perfect_hash(&data[..100000]);
+    let names = find_city_names(&data[..100000]);
 
-    let records = run_parallel(
+    let phf = run_parallel(
         data,
-        &phf,
-        num_slots,
+        &names,
         args.threads
             .unwrap_or(available_parallelism().unwrap().into()),
     );
@@ -415,13 +475,9 @@ fn main() {
                 continue;
             }
             let namepos = &name[..name.len() - 1];
-            let kpos = to_key(namepos);
-            let kneg = to_key(name);
 
-            let idxpos = phf.index_single_part(&kpos);
-            let idxneg = phf.index_single_part(&kneg);
-            let rpos = &records.get(idxpos).unwrap();
-            let rneg = &records.get(idxneg).unwrap();
+            let rpos = phf.index(namepos);
+            let rneg = phf.index(name);
             let (min, avg, max) = Record::merge_pos_neg(rpos, rneg);
 
             if !first {
