@@ -40,18 +40,25 @@ impl Phf {
             ..PtrHashParams::default()
         };
 
-        let hashes: Vec<u64> = keys.iter().map(|key| hash_name(key)).collect();
+        let mut hashes: Vec<u64> = keys.iter().map(|key| hash_name(key)).collect();
+        hashes.sort_unstable();
+        for (x, y) in hashes.iter().zip(hashes.iter().skip(1)) {
+            assert!(x != y, "duplicate hashes!");
+        }
+
         let ptr_hash = PtrHash::new(&hashes, params);
 
-        let slots = vec![Record::default(); num_slots];
-        // for key in &keys {
-        // let hash = hash_name(&key);
-        // assert!(hash != 0);
-        // let idx = ptr_hash.index_single_part(&hash);
-        // let record = &mut slots[idx];
-        // assert_eq!(record.hash, 0);
-        // record.hash = hash;
-        // }
+        let mut slots = vec![Record::default(); num_slots];
+
+        // Fill each record with its own hash.
+        for key in &keys {
+            let hash = hash_name(key);
+            assert!(hash != 0);
+            let idx = ptr_hash.index_single_part(&hash);
+            let record = &mut slots[idx];
+            assert_eq!(record.hash, 0);
+            record.hash = hash;
+        }
 
         Self {
             ptr_hash,
@@ -77,8 +84,8 @@ impl Phf {
     }
     fn merge(&mut self, r: Self) {
         if self.keys == r.keys {
-            for (slot, r_slot) in self.slots.iter_mut().zip(&r.slots) {
-                slot.merge(r_slot);
+            for key in &r.keys {
+                self.index_mut(key).merge(r.index(key));
             }
             return;
         }
@@ -132,6 +139,7 @@ struct Record {
     /// Byte representation of string b"bc.d" or b"\0c.d".
     max: u32,
     sum: u64,
+    hash: u64,
 }
 
 impl Record {
@@ -141,9 +149,10 @@ impl Record {
             min: 0,
             max: 0,
             sum: 0,
+            hash: 0,
         }
     }
-    fn add(&mut self, raw_value: u32, value: u64) {
+    fn add(&mut self, raw_value: u32, value: u64, hash: u64) {
         // assert2::debug_assert!(value < 1000);
         self.count += 1;
         self.sum += value;
@@ -154,12 +163,19 @@ impl Record {
         if raw_value > self.max {
             self.max = raw_value;
         }
+        // TODO: Rebuild PHF when this fails.
+        assert_eq!(hash, self.hash);
     }
     fn merge(&mut self, other: &Self) {
         self.count += other.count;
         self.sum += other.sum_to_val() as u64;
         self.min = self.min.min(other.min);
         self.max = self.max.max(other.max);
+        if self.hash != 0 && other.hash != 0 {
+            assert_eq!(self.hash, other.hash);
+        } else {
+            self.hash += other.hash;
+        }
     }
     fn sum_to_val(&self) -> V {
         let m = (1 << 21) - 1;
