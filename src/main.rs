@@ -170,7 +170,6 @@ impl Record {
         let neg_sum = neg.sum as V;
         let sum = pos_sum - neg_sum;
         let count = (pos.count + neg.count) as V;
-        // let count = avg_count as V;
         // round to nearest
         let avg = (sum + count / 2).div_floor(count);
 
