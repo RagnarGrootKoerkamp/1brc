@@ -12,6 +12,7 @@ use fxhash::FxHashSet;
 use memmap2::Mmap;
 use ptr_hash::PtrHashParams;
 use std::{
+    hash::Hasher,
     simd::{cmp::SimdPartialEq, Simd},
     thread::available_parallelism,
     vec::Vec,
@@ -226,19 +227,10 @@ fn format(v: V) -> String {
 
 #[allow(unused)]
 fn hash_name(name: &[u8]) -> u64 {
-    // Hash the first and last 8 bytes.
-    // TODO: More robust hash that actually uses all characters.
-    let head: [u8; 8] = unsafe { *name.get_unchecked(..8).split_array_ref().0 };
-    let tail: [u8; 8] = unsafe {
-        *name
-            .get_unchecked(name.len().wrapping_sub(8)..)
-            .split_array_ref()
-            .0
-    };
-    let shift = 64usize.saturating_sub(8 * name.len());
-    let khead = u64::from_ne_bytes(head) << shift;
-    let ktail = u64::from_ne_bytes(tail) >> shift;
-    khead.wrapping_add(ktail)
+    // TODO: Inline this and use fewer round of AES.
+    let mut hasher = gxhash::GxHasher::default();
+    hasher.write(name);
+    hasher.finish()
 }
 
 /// Number of SIMD lanes. AVX2 has 256 bits, so 32 lanes.
