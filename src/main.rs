@@ -438,6 +438,9 @@ struct Args {
 
     #[clap(long)]
     print: bool,
+
+    #[clap(long)]
+    stats: bool,
 }
 
 fn main() {
@@ -459,6 +462,22 @@ fn main() {
 
     // Build a perfect hash function on the cities found in the first 100k characters.
     let names = find_city_names(&data[..2000000]);
+
+    if args.stats {
+        eprintln!("Num cities: {}", names.len());
+        let mut lens = vec![0; 102];
+        for n in &names {
+            if *n.last().unwrap() == b';' {
+                continue;
+            }
+            lens[n.len()] += 1;
+        }
+        for (len, count) in lens.iter().enumerate() {
+            if *count != 0 {
+                eprintln!("{}: {}", len, count);
+            }
+        }
+    }
 
     let phf = run_parallel(
         data,
