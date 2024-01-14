@@ -289,7 +289,7 @@ fn iter_lines<'a>(
     };
 
     let init_state = |idx: usize| {
-        let first_end = find(idx, end);
+        let first_end = find_long(idx, end);
         State {
             start: first_end + 1,
             sep: first_end + 1,
