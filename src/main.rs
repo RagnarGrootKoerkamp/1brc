@@ -31,7 +31,7 @@ impl Phf {
     fn new(mut keys: Vec<Vec<u8>>) -> Self {
         keys.sort();
 
-        let num_slots = 2 * keys.len();
+        let num_slots = keys.len() * 5 / 2;
         let params = ptr_hash::PtrHashParams {
             alpha: 0.9,
             c: 1.5,
