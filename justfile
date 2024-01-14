@@ -1,14 +1,16 @@
 run *args:
     cargo run -r --quiet -- {{args}}
+large *args:
+    cargo run -r --quiet -- measurements3.txt {{args}}
 time *args:
     cargo build -r --quiet && time ./target/release/one-billion-row-challenge {{args}}
 small:
     cargo run --quiet -- measurements-small.txt
 flame:
     cargo flamegraph --open
-stat:
+stat *args:
     cargo build -r --quiet
-    perf stat cargo run -r
+    perf stat cargo run -r --quiet -- {{args}}
 record:
     cargo build -r --quiet
     perf record cargo run -r
