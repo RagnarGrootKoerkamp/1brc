@@ -72,14 +72,8 @@ impl Phf {
         self.index_hash_mut(hash_name(key))
     }
     fn merge(&mut self, r: Self) {
-        if self.keys == r.keys {
-            for (slot, r_slot) in self.slots.iter_mut().zip(&r.slots) {
-                slot.merge(r_slot);
-            }
-            return;
-        }
-        // TODO: If one is a subset of the other, merge smaller into larger.
-
+        // TODO: If key sets are equal or one is a subset of the other, merge
+        // smaller into larger.
         let mut new_keys = vec![];
         let mut i1 = 0;
         let mut i2 = 0;
