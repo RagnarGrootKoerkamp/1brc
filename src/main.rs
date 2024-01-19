@@ -359,10 +359,10 @@ fn run(data: &[u8], keys: &[Vec<u8>]) -> Phf {
                 let idx2 = h.compute_index(h2);
                 let idx3 = h.compute_index(h3);
 
-                h.get_index_mut(idx0).add(raw0, raw_to_pdep(raw0));
-                h.get_index_mut(idx1).add(raw1, raw_to_pdep(raw1));
-                h.get_index_mut(idx2).add(raw2, raw_to_pdep(raw2));
-                h.get_index_mut(idx3).add(raw3, raw_to_pdep(raw3));
+                h.get_index_mut(idx0).add(raw0, raw_to_pdep(raw0), h0);
+                h.get_index_mut(idx1).add(raw1, raw_to_pdep(raw1), h1);
+                h.get_index_mut(idx2).add(raw2, raw_to_pdep(raw2), h2);
+                h.get_index_mut(idx3).add(raw3, raw_to_pdep(raw3), h3);
             }
         },
     );
