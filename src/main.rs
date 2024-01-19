@@ -124,7 +124,7 @@ impl Phf {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[repr(align(32))]
 struct Record {
     count: u64,
