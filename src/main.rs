@@ -482,7 +482,11 @@ fn main() {
     if args.print {
         print!("{{");
         let mut first = true;
-        for name in &names {
+
+        let mut keys = phf.keys.clone();
+        keys.sort_by(|kl, kr| to_str(kl).cmp(to_str(kr)));
+
+        for name in &keys {
             if *name.last().unwrap() != b';' {
                 continue;
             }
