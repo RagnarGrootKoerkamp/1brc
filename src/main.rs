@@ -103,12 +103,15 @@ impl Phf {
                 i2 += 1;
                 continue;
             }
+            panic!();
         }
         while i1 < self.keys.len() {
             new_keys.push(self.keys[i1].clone());
+            i1 += 1;
         }
         while i2 < r.keys.len() {
             new_keys.push(r.keys[i2].clone());
+            i2 += 1;
         }
         let mut new_phf = Self::new(new_keys);
         for key in &self.keys {
