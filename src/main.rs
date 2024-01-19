@@ -39,18 +39,15 @@ impl Phf {
             ..PtrHashParams::default()
         };
 
-        let hashes: Vec<u64> = keys.iter().map(|key| hash_name(key)).collect();
+        let mut hashes: Vec<u64> = keys.iter().map(|key| hash_name(key)).collect();
+        hashes.sort();
+        for (x, y) in hashes.iter().zip(hashes.iter().skip(1)) {
+            assert!(*x != *y, "DUPLICATE HASH");
+        }
+
         let ptr_hash = PtrHash::new(&hashes, params);
 
         let slots = vec![Record::default(); num_slots];
-        // for key in &keys {
-        // let hash = hash_name(&key);
-        // assert!(hash != 0);
-        // let idx = ptr_hash.index_single_part(&hash);
-        // let record = &mut slots[idx];
-        // assert_eq!(record.hash, 0);
-        // record.hash = hash;
-        // }
 
         Self {
             ptr_hash,
