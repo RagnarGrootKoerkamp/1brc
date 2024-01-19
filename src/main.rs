@@ -460,7 +460,7 @@ fn main() {
     let data = &data[offset..];
 
     // Build a perfect hash function on the cities found in the first 100k characters.
-    let names = find_city_names(&data[..2000000]);
+    let names = find_city_names(&data[..4000000]);
 
     if args.stats {
         eprintln!("Num cities: {}", names.len());
