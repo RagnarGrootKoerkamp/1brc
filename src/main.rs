@@ -176,13 +176,12 @@ impl Record {
         // round to nearest
         let avg = (sum + count / 2).div_floor(count);
 
-        let mask = 0x0f0f000f;
-        let pos_max = raw_to_value(pos.max & mask);
-        let neg_max = -raw_to_value(neg.min & mask);
+        let pos_max = raw_to_value(pos.max);
+        let neg_max = -raw_to_value(neg.min);
         let max = pos_max.max(neg_max);
 
-        let pos_min = raw_to_value(pos.min & mask);
-        let neg_min = -raw_to_value(neg.max & mask);
+        let pos_min = raw_to_value(pos.min);
+        let neg_min = -raw_to_value(neg.max);
         let min = pos_min.min(neg_min);
 
         (min, avg, max)
@@ -215,7 +214,8 @@ fn raw_to_pdep(raw: u32) -> u64 {
 }
 
 fn raw_to_value(v: u32) -> V {
-    let bytes = v.to_be_bytes();
+    let mask = 0x0f0f000f;
+    let bytes = (v & mask).to_be_bytes();
     // s = bc.d
     let b = bytes[0] as V;
     let c = bytes[1] as V;
