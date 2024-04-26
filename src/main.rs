@@ -2,7 +2,6 @@
     slice_split_once,
     portable_simd,
     slice_as_chunks,
-    split_array,
     type_alias_impl_trait,
     int_roundings
 )]
@@ -222,11 +221,12 @@ fn format(v: V) -> String {
 fn hash_name(name: &[u8]) -> u64 {
     // Hash the first and last 8 bytes.
     // TODO: More robust hash that actually uses all characters.
-    let head: [u8; 8] = unsafe { *name.get_unchecked(..8).split_array_ref().0 };
+    let head: [u8; 8] = unsafe { *name.get_unchecked(..8).split_first_chunk().unwrap().0 };
     let tail: [u8; 8] = unsafe {
         *name
             .get_unchecked(name.len().wrapping_sub(8)..)
-            .split_array_ref()
+            .split_first_chunk()
+            .unwrap()
             .0
     };
     let shift = 64usize.saturating_sub(8 * name.len());
